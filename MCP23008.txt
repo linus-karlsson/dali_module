@@ -1,0 +1,78 @@
+00 direction register
+    1: input, 0: output
+    Controls the direction of the data I/O.
+    When a bit is set, the corresponding pin becomes an
+    input. When a bit is clear, the corresponding pin
+    becomes an output.
+
+01 input polarity register
+    1 = GPIO register bit will reflect the opposite logic state of the input pin
+    0 = GPIO register bit will reflect the same logic state of the input pin
+
+02 interrupt on change control register
+    1 = Enable GPIO input pin for interrupt-on-change event
+    0 = Disable GPIO input pin for interrupt-on-change event
+
+03 default compare register for the interupt on change 
+
+    DEF7:DEF0: These bits set the compare value for pins configured for interrupt-on-change from
+    defaults [7:0]. Refer to INTCON.
+    If the associated pin level is the opposite from the register bit, an interrupt occurs.
+
+04 interrupt control register
+    The INTCON register controls how the associated pin
+    value is compared for the interrupt-on-change feature.
+    If a bit is set, the corresponding I/O pin is compared
+    against the associated bit in the DEFVAL register. If a
+    bit value is clear, the corresponding I/O pin is compared
+    against the previous value.
+
+    IOC7:IOC0: These bits control how the associated pin value is compared for interrupt-on-change [7:0]
+    1 = Controls how the associated pin value is compared for interrupt-on-change
+    0 = Pin value is compared against the previous pin value
+    
+05 config
+    bit 5 SEQOP: Sequential Operation Mode
+    1 = Sequential operation disabled, Address Pointer does not increment
+    0 = Sequential operation enabled, Address Pointer increments
+
+    bit 4 DISSLW: Slew Rate Control Bit for SDA Output
+    1 = Slew rate disabled
+    0 = Slew rate enabled
+
+    bit 2 ODR: This bit configures the INT pin as an open-drain output
+    1 = Open-drain output (overrides the INTPOL bit)
+    0 = Active driver output (INTPOL bit sets the polarity)
+
+    bit 1 INTPOL: This bit sets the polarity of the INT output pin
+    1 = Active-high
+    0 = Active-low
+
+
+06 pull up config
+    The GPPU register controls the pull-up resistors for the
+    PORT pins. If a bit is set and the corresponding pin is
+    configured as an input, the corresponding PORT pin is
+    internally pulled up with a 100 k/om resistor.
+
+    bits is the pin, 0 - 7;
+
+07 interrupt flag register
+    The INTF register reflects the interrupt condition on the
+    PORT pins of any pin that is enabled for interrupts via
+    the GPINTEN register. A ‘set’ bit indicates that the
+    associated pin caused the interrupt.
+    This register is ‘read-only’. Writes to this register will be
+    ignored.
+
+08 interrup capture register
+    The INTCAP register captures the GPIO port value at
+    the time the interrupt occurred. The register is
+    ‘read-only’ and is updated only when an interrupt
+    occurs. The register will remain unchanged until the
+    interrupt is cleared via a read of INTCAP or GPIO
+
+09 GPIO register
+    reading and writing to the ports gpio
+
+
