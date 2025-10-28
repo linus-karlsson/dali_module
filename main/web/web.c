@@ -13,8 +13,6 @@
 static string32_t yuno = {};
 static string32_t detail = {};
 
-static size_t buffer_pointer = 0;
-static char html_buffer[8 * 1024] = {};
 static int LED1status = 1;
 static uint8_t currentBrightness = 1;
 
@@ -28,166 +26,173 @@ static httpd_handle_t server = NULL;
 static esp_netif_t* netif_ap = NULL;
 static lsx_timer_handle_t shut_down_timer = NULL;
 
-#define WEB_LOG_BUFFER_SIZE 4096
-static SemaphoreHandle_t g_log_semaphore;
-static uint32_t g_log_head = 0;
-static uint32_t g_log_tail = 0;
-static char g_html_log_buffer[WEB_LOG_BUFFER_SIZE] = {};
+static uint8_t g_scenes[8] = {};
 
-void web_log(const char* log)
+void add_html_(const char* html, char* buffer, size_t buffer_size,
+               size_t* buffer_pointer_out)
 {
-  if (xSemaphoreTake(g_log_semaphore, portMAX_DELAY) == pdPASS)
-  {
-    uint32_t log_len = strlen(log);
-    for (uint32_t i = 0; i < log_len; ++i)
-    {
-      g_html_log_buffer[g_log_tail++] = log[i];
-      g_log_tail *= (g_log_tail < WEB_LOG_BUFFER_SIZE);
-      g_log_head += (g_log_tail == g_log_head);
-      g_log_head *= (g_log_head < WEB_LOG_BUFFER_SIZE);
-    }
-    xSemaphoreGive(g_log_semaphore);
-  }
-}
-
-void add_html(const char* html)
-{
+  size_t buffer_pointer = (*buffer_pointer_out);
   size_t html_len = strlen(html);
-  size_t size_left = sizeof(html_buffer) - buffer_pointer;
+  size_t size_left = buffer_size - buffer_pointer;
   if (html_len < size_left)
   {
-    memcpy(html_buffer + buffer_pointer, html, html_len);
+    memcpy(buffer + buffer_pointer, html, html_len);
     buffer_pointer += html_len;
-    html_buffer[buffer_pointer] = '\0';
+    buffer[buffer_pointer] = '\0';
   }
   else
   {
     lsx_log("ERROR, add html\n");
   }
+  (*buffer_pointer_out) = buffer_pointer;
 }
 
-char* send_home_page(void)
+#define add_html_d(html) add_html_(html, html_buffer, html_size, &html_pointer)
+
+static size_t home_page_buffer_pointer = 0;
+static char home_page_html_buffer[3 * 1024] = {};
+
+void add_home_html(const char* html)
 {
-  buffer_pointer = 0;
-  html_buffer[0] = '\0';
-  add_html("<!DOCTYPE html><html><head>\n");
-  add_html("<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=yes'>\n");
-  add_html("<title>DALI</title>\n");
-  add_html("<style>\n");
-  add_html("body { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; margin:0; background-color:#f5f5f5; font-family:Arial,sans-serif; }\n");
-  add_html("#main { width:90%; max-width:400px; background:white; padding:20px; border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:20px; align-items:center; }\n");
-  add_html("button { width:100%; background:#2196F3; color:white; border:none; padding:15px; border-radius:5px; font-size:18px; cursor:pointer; }\n");
-  add_html("button:hover { background:#1976D2; }\n");
-
-  add_html("</style></head><body>\n");
-
-  add_html("<div id='main'>\n");
-  add_html("<h2 style='color:#2196F3;'>DALI</h2>\n");
-  add_html("<button onclick=\"window.location.href='/setPage'\">Set Values</button>\n");
-  add_html("<button onclick=\"window.location.href='/updatePage'\">Update Firmware</button>\n");
-  add_html("</div>\n");
-
-  add_html("<script>\n");
-  add_html("</script>\n");
-
-  add_html("</body></html>\n");
-  return html_buffer;
+  add_html_(html, home_page_html_buffer, sizeof(home_page_html_buffer),
+            &home_page_buffer_pointer);
 }
 
-
-char* send_html(void)
+void send_home_page(void)
 {
-  buffer_pointer = 0;
-  html_buffer[0] = '\0';
+  add_home_html("<!DOCTYPE html><html><head>\n");
+  add_home_html(
+    "<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=yes'>\n");
+  add_home_html("<title>DALI</title>\n");
+  add_home_html("<style>\n");
+  add_home_html(
+    "body { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; margin:0; background-color:#f5f5f5; font-family:Arial,sans-serif; }\n");
+  add_home_html(
+    "#main { width:90%; max-width:400px; background:white; padding:20px; border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:20px; align-items:center; }\n");
+  add_home_html(
+    "button { width:100%; background:#2196F3; color:white; border:none; padding:15px; border-radius:5px; font-size:18px; cursor:pointer; }\n");
+  add_home_html("button:hover { background:#1976D2; }\n");
 
-  add_html("<!DOCTYPE html> <html>\n");
-  add_html(
+  add_home_html("</style></head><body>\n");
+
+  add_home_html("<div id='main'>\n");
+  add_home_html("<h2 style='color:#2196F3;'>DALI</h2>\n");
+  add_home_html(
+    "<button onclick=\"window.location.href='/setPage'\">Set Values</button>\n");
+  add_home_html(
+    "<button onclick=\"window.location.href='/updatePage'\">Update Firmware</button>\n");
+  add_home_html("</div>\n");
+
+  add_home_html("<script>\n");
+  add_home_html("</script>\n");
+
+  add_home_html("</body></html>\n");
+}
+
+char* send_html(size_t* html_pointer_out)
+{
+  (*html_pointer_out) = 0;
+
+  size_t html_pointer = 0;
+  size_t html_size = 10 * 1024;
+  char* html_buffer = (char*)calloc(html_size, sizeof(char));
+  if(html_buffer == NULL)
+  {
+    return html_buffer;
+  }
+
+  add_html_d("<!DOCTYPE html> <html>\n");
+  add_html_d(
     "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
-  add_html("<title>Update</title>\n");
-  add_html("<style>\n");
-  add_html(
+  add_html_d("<title>Update</title>\n");
+  add_html_d("<style>\n");
+  add_html_d(
     "body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }\n");
-  add_html(
+  add_html_d(
     "#upload-form { width: 90%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; gap: 10px; align-items: center; }\n");
-  add_html(
+  add_html_d(
     "input[type='file'] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }\n");
-  add_html(
+  add_html_d(
     "input[type='submit'] { background: #2196F3; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; width: 100%; }\n");
-  add_html("input[type='submit']:hover { background: #1976D2; }\n");
-  add_html(
+  add_html_d("input[type='submit']:hover { background: #1976D2; }\n");
+  add_html_d(
     "#prg-container { width: 90%; max-width: 400px; background-color: #e0e0e0; border-radius: 8px; overflow: hidden; margin-top: 10px; }\n");
-  add_html(
+  add_html_d(
     "#prg { width: 0%; background-color: #2196F3; padding: 10px; color: white; text-align: center; font-size: 16px; transition: width 0.3s ease-in-out; }\n");
-  add_html(".dropdown { width: 90%; max-width: 400px; margin-bottom: 10px; }\n");
-  add_html(
+  add_html_d(".dropdown { width: 90%; max-width: 400px; margin-bottom: 10px; }\n");
+  add_html_d(
     ".dropdown button { width: 100%; padding: 10px; font-size: 18px; border: none; background-color: #3498db; color: white; border-radius: 5px; cursor: pointer; }\n");
-  add_html(
+  add_html_d(
     ".dropdown-content { display: none; flex-direction: column; gap: 5px; padding: 10px; background: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }\n");
-  add_html(
+  add_html_d(
     ".dropdown-content a { text-align: center; padding: 10px; font-size: 16px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; }\n");
-  add_html(".dropdown-content a:hover { background: #2980b9; }\n");
+  add_html_d(".dropdown-content a:hover { background: #2980b9; }\n");
 
-  add_html(
+  add_html_d(
     "#brightness-slider { width: 90%; max-width: 500px; height: 20px; appearance: none; background: #ddd; border-radius: 10px; outline: none; transition: background 0.3s; }\n");
 
-  add_html(
+  add_html_d(
     "#brightness-slider::-webkit-slider-thumb { appearance: none; width: 30px; height: 30px; background: #3498db; border-radius: 50%; cursor: pointer; }\n");
 
-  add_html(
+  add_html_d(
     "#brightness-slider::-moz-range-thumb { width: 30px; height: 30px; background: #3498db; border-radius: 50%; cursor: pointer; }\n");
 
-  add_html("  #file-input {\n");
-  add_html("    width: 90%;\n");
-  add_html("    max-width: 400px;\n");
-  add_html("    font-size: 16px;\n");
-  add_html("    padding: 12px;\n");
-  add_html("    border: 1px solid #ccc;\n");
-  add_html("    border-radius: 5px;\n");
-  add_html("    margin-top: 10px;\n");
-  add_html("  }\n");
-  add_html("  #update-button {\n");
-  add_html("    width: 90%;\n");
-  add_html("    max-width: 400px;\n");
-  add_html("    background-color: #2196F3;\n");
-  add_html("    color: white;\n");
-  add_html("    border: none;\n");
-  add_html("    padding: 12px 20px;\n");
-  add_html("    border-radius: 5px;\n");
-  add_html("    font-size: 18px;\n");
-  add_html("    cursor: pointer;\n");
-  add_html("    margin-top: 10px;\n");
-  add_html("  }\n");
-  add_html("  #update-button:hover {\n");
-  add_html("    background-color: #1976D2;\n");
-  add_html("  }\n");
+  add_html_d("  #file-input {\n");
+  add_html_d("    width: 90%;\n");
+  add_html_d("    max-width: 400px;\n");
+  add_html_d("    font-size: 16px;\n");
+  add_html_d("    padding: 12px;\n");
+  add_html_d("    border: 1px solid #ccc;\n");
+  add_html_d("    border-radius: 5px;\n");
+  add_html_d("    margin-top: 10px;\n");
+  add_html_d("  }\n");
+  add_html_d("  #update-button {\n");
+  add_html_d("    width: 90%;\n");
+  add_html_d("    max-width: 400px;\n");
+  add_html_d("    background-color: #2196F3;\n");
+  add_html_d("    color: white;\n");
+  add_html_d("    border: none;\n");
+  add_html_d("    padding: 12px 20px;\n");
+  add_html_d("    border-radius: 5px;\n");
+  add_html_d("    font-size: 18px;\n");
+  add_html_d("    cursor: pointer;\n");
+  add_html_d("    margin-top: 10px;\n");
+  add_html_d("  }\n");
+  add_html_d("  #update-button:hover {\n");
+  add_html_d("    background-color: #1976D2;\n");
+  add_html_d("  }\n");
 
-  add_html(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
-  add_html(".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
-  add_html(".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
-  add_html(".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
-  add_html(".menu-content a:hover { background: #1976D2; }\n");
+  add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
+  add_html_d(
+    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
+  add_html_d(
+    ".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
+  add_html_d(
+    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
+  add_html_d(".menu-content a:hover { background: #1976D2; }\n");
 
-  add_html("</style>\n");
-  add_html("</head>\n");
-  add_html("<body>\n");
+  add_html_d("</style>\n");
+  add_html_d("</head>\n");
+  add_html_d("<body>\n");
 
-  add_html("<div id='sidebar' class='sidebar'>\n");
-  add_html("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
-  add_html("<div id='menu-content' class='menu-content'>\n");
-  add_html("<a href='/'>Home</a>\n");
-  add_html("<a href='/setPage'>Set Page</a>\n");
-  add_html("</div></div>\n");
+  add_html_d("<div id='sidebar' class='sidebar'>\n");
+  add_html_d("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
+  add_html_d("<div id='menu-content' class='menu-content'>\n");
+  add_html_d("<a href='/'>Home</a>\n");
+  add_html_d("<a href='/setPage'>Set Page</a>\n");
+  add_html_d("</div></div>\n");
 
-  add_html("<div class='dropdown'>\n");
-  add_html("<button onclick=\"toggleDropdown()\">Controls</button>\n");
-  add_html("<div class='dropdown-content' id='dropdown-content'>\n");
+  add_html_d("<div class='dropdown'>\n");
+  add_html_d("<button onclick=\"toggleDropdown()\">Controls</button>\n");
+  add_html_d("<div class='dropdown-content' id='dropdown-content'>\n");
 
   string256_t temp = {};
 
-  string256(&temp, "<button id='relay1-btn' onclick=\"relay1()\">Relay 1 %s</button>\n",
+  string256(&temp,
+            "<button id='relay1-btn' onclick=\"relay1()\">Relay 1 %s</button>\n",
             (LED1status == 2 ? "OFF" : "ON"));
 
-  add_html(temp.data);
+  add_html_d(temp.data);
 
   string256_reset(&temp);
   string256(
@@ -195,7 +200,7 @@ char* send_html(void)
     "<label for='brightness'>Brightness: <span id='brightness-value'>%u</span></label>\n",
     currentBrightness);
 
-  add_html(temp.data);
+  add_html_d(temp.data);
 
   string256_reset(&temp);
   string256(
@@ -203,221 +208,259 @@ char* send_html(void)
     "<input type='range' id='brightness-slider' min='1' max='100' value='%u' oninput='showBrightness(this.value)' onchange='updateBrightness(this.value)'>\n",
     currentBrightness);
 
-  add_html(temp.data);
+  add_html_d(temp.data);
 
-  add_html("<button id='relay-reset' onclick=\"reset()\">Reset</button>\n");
-  add_html("</div>\n");
-  add_html("</div>\n");
+  add_html_d("<button id='relay-reset' onclick=\"reset()\">Reset</button>\n");
+  add_html_d("</div>\n");
+  add_html_d("</div>\n");
 
-  add_html("<input type='file' id='file-input'>\n");
-  add_html(
+  add_html_d("<input type='file' id='file-input'>\n");
+  add_html_d(
     "<button id='update-button' onclick='uploadFirmware()'>Uppdatera</button>\n");
 
-  add_html("<div id='prg-container'>\n");
-  add_html("<div id='prg'>0%</div>\n");
-  add_html("</div>\n");
+  add_html_d("<div id='prg-container'>\n");
+  add_html_d("<div id='prg'>0%</div>\n");
+  add_html_d("</div>\n");
 
-  add_html("<script>\n");
+  add_html_d("<script>\n");
 
-  add_html("function toggleMenu(){\n");
-  add_html(" var menu=document.getElementById('menu-content');\n");
-  add_html(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
-  add_html("}\n");
+  add_html_d("function toggleMenu(){\n");
+  add_html_d(" var menu=document.getElementById('menu-content');\n");
+  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
+  add_html_d("}\n");
 
-  add_html("function toggleMenu(){\n");
-  add_html(" var menu=document.getElementById('menu-content');\n");
-  add_html(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
-  add_html("}\n");
+  add_html_d("function toggleMenu(){\n");
+  add_html_d(" var menu=document.getElementById('menu-content');\n");
+  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
+  add_html_d("}\n");
 
-  add_html("function toggleDropdown() {\n");
-  add_html("var content = document.getElementById('dropdown-content');\n");
-  add_html(
+  add_html_d("function toggleDropdown() {\n");
+  add_html_d("var content = document.getElementById('dropdown-content');\n");
+  add_html_d(
     "content.style.display = content.style.display === 'flex' ? 'none' : 'flex';\n");
-  add_html("}\n");
-  add_html("function updateBrightness(value) {\n");
-  add_html("  document.getElementById('brightness-value').innerText = value;\n");
-  add_html("  var xhr = new XMLHttpRequest();\n");
-  add_html("  xhr.open('GET', '/setBrightness?value=' + value, true);\n");
-  add_html("  xhr.send();\n");
-  add_html("}\n");
-  add_html("function showBrightness(value) {\n");
-  add_html("  document.getElementById('brightness-value').innerText = value;\n");
-  add_html("}\n");
-  add_html("function relay1() {\n");
-  add_html("  var btn = document.getElementById('relay1-btn');\n");
-  add_html(
+  add_html_d("}\n");
+  add_html_d("function updateBrightness(value) {\n");
+  add_html_d("  document.getElementById('brightness-value').innerText = value;\n");
+  add_html_d("  var xhr = new XMLHttpRequest();\n");
+  add_html_d("  xhr.open('GET', '/setBrightness?value=' + value, true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("}\n");
+  add_html_d("function showBrightness(value) {\n");
+  add_html_d("  document.getElementById('brightness-value').innerText = value;\n");
+  add_html_d("}\n");
+  add_html_d("function relay1() {\n");
+  add_html_d("  var btn = document.getElementById('relay1-btn');\n");
+  add_html_d(
     "  var label = btn.innerText === 'Relay 1 ON' ? 'Relay 1 OFF' : 'Relay 1 ON';\n");
-  add_html("  btn.innerText = label;\n");
-  add_html("  var xhr = new XMLHttpRequest();\n");
-  add_html("  var value = label === 'Relay 1 ON' ? 1 : 2\n;");
-  add_html("  xhr.open('GET', '/relay1?value=' + value, true);\n");
-  add_html("  xhr.send();\n");
-  add_html("}\n");
-  add_html("function reset() {\n");
-  add_html("  var btn = document.getElementById('relay1-btn');\n");
-  add_html("  btn.innerText = 'Relay 1 OFF';\n");
-  add_html("  var xhr = new XMLHttpRequest();\n");
-  add_html("  xhr.open('GET', '/reset', true);\n");
-  add_html("  xhr.send();\n");
-  add_html("}\n");
-  add_html("var prg = document.getElementById('prg');\n");
-  add_html("function uploadFirmware() {\n");
-  add_html("  var fileInput = document.getElementById('file-input');\n");
-  add_html("  if (!fileInput.files.length) return;\n");
-  add_html("  var file = fileInput.files[0];\n");
-  add_html("  var reader = new FileReader();\n");
-  add_html("  reader.onload = function(e) {\n");
-  add_html("    var req = new XMLHttpRequest();\n");
-  add_html("    req.open('POST', '/update');\n");
-  add_html("    req.setRequestHeader('Content-Type', 'application/octet-stream');\n");
-  add_html("    req.upload.addEventListener('progress', function(p) {\n");
-  add_html("      if(p.lengthComputable){\n");
-  add_html("        let w = Math.round((p.loaded / p.total)*100) + '%';\n");
-  add_html("        prg.innerHTML = w;\n");
-  add_html("        prg.style.width = w;\n");
-  add_html("        if(w == '100%') prg.style.backgroundColor = '#04AA6D';\n");
-  add_html("      }\n");
-  add_html("    });\n");
-  add_html("    req.send(e.target.result);\n");
-  add_html("  };\n");
-  add_html("  reader.readAsArrayBuffer(file);\n");
-  add_html("}\n");
-  add_html("</script>\n");
-  add_html("</body></html>\n");
+  add_html_d("  btn.innerText = label;\n");
+  add_html_d("  var xhr = new XMLHttpRequest();\n");
+  add_html_d("  var value = label === 'Relay 1 ON' ? 1 : 2\n;");
+  add_html_d("  xhr.open('GET', '/relay1?value=' + value, true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("}\n");
+  add_html_d("function reset() {\n");
+  add_html_d("  var btn = document.getElementById('relay1-btn');\n");
+  add_html_d("  btn.innerText = 'Relay 1 OFF';\n");
+  add_html_d("  var xhr = new XMLHttpRequest();\n");
+  add_html_d("  xhr.open('GET', '/reset', true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("}\n");
+  add_html_d("var prg = document.getElementById('prg');\n");
+  add_html_d("function uploadFirmware() {\n");
+  add_html_d("  var fileInput = document.getElementById('file-input');\n");
+  add_html_d("  if (!fileInput.files.length) return;\n");
+  add_html_d("  var file = fileInput.files[0];\n");
+  add_html_d("  var reader = new FileReader();\n");
+  add_html_d("  reader.onload = function(e) {\n");
+  add_html_d("    var req = new XMLHttpRequest();\n");
+  add_html_d("    req.open('POST', '/update');\n");
+  add_html_d(
+    "    req.setRequestHeader('Content-Type', 'application/octet-stream');\n");
+  add_html_d("    req.upload.addEventListener('progress', function(p) {\n");
+  add_html_d("      if(p.lengthComputable){\n");
+  add_html_d("        let w = Math.round((p.loaded / p.total)*100) + '%';\n");
+  add_html_d("        prg.innerHTML = w;\n");
+  add_html_d("        prg.style.width = w;\n");
+  add_html_d("        if(w == '100%') prg.style.backgroundColor = '#04AA6D';\n");
+  add_html_d("      }\n");
+  add_html_d("    });\n");
+  add_html_d("    req.send(e.target.result);\n");
+  add_html_d("  };\n");
+  add_html_d("  reader.readAsArrayBuffer(file);\n");
+  add_html_d("}\n");
+  add_html_d("</script>\n");
+  add_html_d("</body></html>\n");
+
+  (*html_pointer_out) = html_pointer;
   return html_buffer;
 }
 
-char* send_html_inputs(void)
+char* send_html_inputs(size_t* html_pointer_out)
 {
-  buffer_pointer = 0;
-  html_buffer[0] = '\0';
+  (*html_pointer_out) = 0;
 
-  add_html("<!DOCTYPE html><html>\n");
-  add_html("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
-  add_html("<title>Number Inputs</title>\n");
-  add_html("<style>\n");
-  add_html("body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }\n");
-  add_html("#input-list { width: 90%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }\n");
-  add_html(".input-item { display: flex; justify-content: space-between; align-items: center; }\n");
-  add_html(".input-item label { font-size: 16px; color: #333; }\n");
-  add_html(".input-item input { width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; text-align: center; font-size: 16px; }\n");
-  add_html("#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 15px; }\n");
-  add_html("#submit-btn:hover { background: #1976D2; }\n");
+  size_t html_pointer = 0;
+  size_t html_size = 6 * 1024;
+  char* html_buffer = (char*)calloc(html_size, sizeof(char));
 
-  add_html(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
-  add_html(".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
-  add_html(".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
-  add_html(".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
-  add_html(".menu-content a:hover { background: #1976D2; }\n");
-
-  add_html("</style>\n");
-  add_html("</head>\n<body>\n");
-
-  add_html("<div id='sidebar' class='sidebar'>\n");
-  add_html("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
-  add_html("<div id='menu-content' class='menu-content'>\n");
-  add_html("<a href='/'>Home</a>\n");
-  add_html("<a href='/updatePage'>Update Page</a>\n");
-  add_html("</div></div>\n");
-
-  add_html("<div id='input-list'>\n");
-  add_html("<h2 style='text-align:center; color:#2196F3;'>Enter Brightness (0-100)</h2>\n");
-
-  for (int i = 1; i <= 8; i++) {
-    string256_t temp = {};
-    string256(&temp,
-      "<div class='input-item'><label for='num%d'>Scene %d:</label>"
-      "<input type='number' id='num%d' name='num%d' min='0' max='100' value='0'></div>\n",
-      i, i, i, i);
-    add_html(temp.data);
+  if(html_buffer == NULL)
+  {
+    return html_buffer;
   }
 
-  add_html("<button id='submit-btn' onclick='submitValues()'>Submit</button>\n");
-  add_html("</div>\n");
+  add_html_d("<!DOCTYPE html><html>\n");
+  add_html_d(
+    "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
+  add_html_d("<title>Number Inputs</title>\n");
+  add_html_d("<style>\n");
+  add_html_d(
+    "body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }\n");
+  add_html_d(
+    "#input-list { width: 90%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }\n");
+  add_html_d(
+    ".input-item { display: flex; justify-content: space-between; align-items: center; }\n");
+  add_html_d(".input-item label { font-size: 16px; color: #333; }\n");
+  add_html_d(
+    ".input-item input { width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; text-align: center; font-size: 16px; }\n");
+  add_html_d(
+    "#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 15px; }\n");
+  add_html_d("#submit-btn:hover { background: #1976D2; }\n");
 
-  add_html("<script>\n");
+  add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
+  add_html_d(
+    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
+  add_html_d(
+    ".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
+  add_html_d(
+    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
+  add_html_d(".menu-content a:hover { background: #1976D2; }\n");
 
-  add_html("function toggleMenu(){\n");
-  add_html(" var menu=document.getElementById('menu-content');\n");
-  add_html(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
-  add_html("}\n");
+  add_html_d("</style>\n");
+  add_html_d("</head>\n<body>\n");
 
-  add_html("function submitValues(){\n");
-  add_html("  let values = [];\n");
-  add_html("  for(let i=1;i<=8;i++){\n");
-  add_html("    let val = document.getElementById('num'+i).value;\n");
-  add_html("    if(val<0||val>100){alert('Values must be between 0 and 100');return;}\n");
-  add_html("    values.push(val);\n");
-  add_html("  }\n");
-  add_html("  let query = values.map((v,i)=>'v'+(i+1)+'='+v).join('&');\n");
-  add_html("  let xhr = new XMLHttpRequest();\n");
-  add_html("  xhr.open('GET','/setValues?'+query,true);\n");
-  add_html("  xhr.send();\n");
-  add_html("  alert('Values sent!');\n");
-  add_html("}\n");
-  add_html("</script>\n");
+  add_html_d("<div id='sidebar' class='sidebar'>\n");
+  add_html_d("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
+  add_html_d("<div id='menu-content' class='menu-content'>\n");
+  add_html_d("<a href='/'>Home</a>\n");
+  add_html_d("<a href='/updatePage'>Update Page</a>\n");
+  add_html_d("</div></div>\n");
 
+  add_html_d("<div id='input-list'>\n");
+  add_html_d(
+    "<h2 style='text-align:center; color:#2196F3;'>Enter Brightness (0-100)</h2>\n");
 
-  add_html("</body></html>\n");
+  for (int i = 1; i <= 8; i++)
+  {
+    string256_t temp = {};
+    string256(
+      &temp,
+      "<div class='input-item'><label for='num%d'>Scene %d:</label>"
+      "<input type='number' id='num%d' name='num%d' min='0' max='100' value='%u'></div>\n",
+      i, i, i, i, g_scenes[i - 1]);
+    add_html_d(temp.data);
+  }
 
+  add_html_d("<button id='submit-btn' onclick='submitValues()'>Submit</button>\n");
+  add_html_d("</div>\n");
+
+  add_html_d("<script>\n");
+
+  add_html_d("function toggleMenu(){\n");
+  add_html_d(" var menu=document.getElementById('menu-content');\n");
+  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
+  add_html_d("}\n");
+
+  add_html_d("function submitValues(){\n");
+  add_html_d("  let values = [];\n");
+  add_html_d("  for(let i=1;i<=8;i++){\n");
+  add_html_d("    let val = document.getElementById('num'+i).value;\n");
+  add_html_d(
+    "    if(val<0||val>100){alert('Values must be between 0 and 100');return;}\n");
+  add_html_d("    values.push(val);\n");
+  add_html_d("  }\n");
+  add_html_d("  let query = values.map((v,i)=>'v'+(i+1)+'='+v).join('&');\n");
+  add_html_d("  let xhr = new XMLHttpRequest();\n");
+  add_html_d("  xhr.open('GET','/setValues?'+query,true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("  alert('Values sent!');\n");
+  add_html_d("}\n");
+  add_html_d("</script>\n");
+
+  add_html_d("</body></html>\n");
+
+  (*html_pointer_out) = html_pointer;
   return html_buffer;
 }
-
 
 esp_err_t root_get_handler(httpd_req_t* request)
 {
-  httpd_resp_send(request, send_home_page(), buffer_pointer);
+  httpd_resp_send(request, home_page_html_buffer, home_page_buffer_pointer);
   return ESP_OK;
 }
 
 esp_err_t update_page_handler(httpd_req_t* request)
 {
-  httpd_resp_send(request, send_html(), buffer_pointer);
+  size_t html_pointer = 0;
+  char* html = send_html(&html_pointer);
+  if (html)
+  {
+    httpd_resp_send(request, html, html_pointer);
+    free(html);
+  }
   return ESP_OK;
 }
 
 esp_err_t set_brigthness_post_handler(httpd_req_t* request)
 {
-  httpd_resp_send(request, send_html_inputs(), buffer_pointer);
+  size_t html_pointer = 0;
+  char* html = send_html_inputs(&html_pointer);
+  if(html)
+  {
+    httpd_resp_send(request, html, html_pointer);
+    free(html);
+  }
   return ESP_OK;
 }
 
-esp_err_t handle_set_values(httpd_req_t *req)
+esp_err_t handle_set_values(httpd_req_t* req)
 {
-    char query[128];
-    size_t query_len = httpd_req_get_url_query_len(req) + 1;
+  char query[128];
+  size_t query_len = httpd_req_get_url_query_len(req) + 1;
 
-    if (query_len > sizeof(query)) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Query too long");
-        return ESP_FAIL;
+  if (query_len > sizeof(query))
+  {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Query too long");
+    return ESP_FAIL;
+  }
+
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
+  {
+    char param[8];
+    int values[8] = { 0 };
+
+    for (int i = 1; i <= 8; i++)
+    {
+      char key[4];
+      snprintf(key, sizeof(key), "v%d", i);
+      if (httpd_query_key_value(query, key, param, sizeof(param)) == ESP_OK)
+      {
+        values[i - 1] = atoi(param);
+      }
     }
 
-    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK) {
-        char param[8];
-        int values[8] = {0};
-
-        for (int i = 1; i <= 8; i++) {
-            char key[4];
-            snprintf(key, sizeof(key), "v%d", i);
-            if (httpd_query_key_value(query, key, param, sizeof(param)) == ESP_OK) {
-                values[i - 1] = atoi(param);
-            }
-        }
-
-        // Example: print them to serial monitor
-        printf("Received values: ");
-        for (int i = 0; i < 8; i++) {
-            printf("%d ", values[i]);
-        }
-        printf("\n");
-
-        // TODO: use these values however you want
+    printf("Received values: ");
+    for (int i = 0; i < 8; i++)
+    {
+      printf("%d ", values[i]);
+      g_scenes[i] = values[i];
     }
+    printf("\n");
 
-    httpd_resp_send(req, "Values received", HTTPD_RESP_USE_STRLEN);
-    return ESP_OK;
+  }
+
+  httpd_resp_send(req, "Values received", HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
 }
-
 
 esp_err_t update_post_handler(httpd_req_t* req)
 {
@@ -522,8 +565,12 @@ void web_shutdown_callback(void* arguments)
   printf("Wi-Fi shut down complete.\n");
 }
 
-void web_initialize(char* uid)
+void web_initialize(char* uid, uint8_t* scenes)
 {
+  memcpy(g_scenes, scenes, sizeof(g_scenes));
+
+  send_home_page();
+
   uint32_t uid_len = strlen(uid);
   uint32_t iterations = min(uid_len, 16);
   uint32_t extra = 0;
@@ -570,7 +617,7 @@ void web_initialize(char* uid)
     wifi_config.ap.ssid_len = detail.length;
     memcpy(wifi_config.ap.password, yuno.data, yuno.length);
     wifi_config.ap.channel = 1;
-    wifi_config.ap.max_connection = 2;
+    wifi_config.ap.max_connection = 1;
     wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
 
     esp_wifi_set_mode(WIFI_MODE_AP);

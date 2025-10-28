@@ -363,11 +363,7 @@ void dali_task(void* pvParameters)
   timer_ms_t send_brightness_timer = timer_create_ms(10000);
 
   const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
-  bool filter_value[3] = { 1, 1, 1 };
-  dali.scenes[7] = 60;
   uint8_t filter_count[3] = {};
-
-  timer_ms_t send_blinking = timer_create_ms(10000);
 
   uint32_t tick = 1;
 
@@ -381,14 +377,9 @@ void dali_task(void* pvParameters)
       dali.set_scenes = false;
     }
 
-    if (timer_is_up_ms(send_blinking, lsx_get_millis()))
-    {
-      memset(filter_value, 0, sizeof(filter_value));
-    }
-
     for (uint32_t i = 0; i < array_size(filter_count); ++i)
     {
-#if 0
+#if 1
       if (!check_input(dali_input_pins[i], filter_value + i, filter_count + i))
       {
         memset(filter_count, 0, sizeof(filter_count));
@@ -711,8 +702,10 @@ uint32_t light_control_light_source_to_tring(uint8_t light_source, char* result)
   return len;
 }
 
-void dali_initialize(void)
+void dali_initialize(uint8_t* scenes)
 {
+  memcpy(dali.scenes, scenes, sizeof(dali.scenes));
+
   xTaskCreateStatic(dali_task, "DALI Task", DALI_STACK_SIZE, NULL, 3, dali_stack,
                     &dali_stack_type);
 }

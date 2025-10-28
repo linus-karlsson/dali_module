@@ -35,7 +35,12 @@ void setup()
 {
   getUid64();
   lsx_nvs_initialize();
-  dali_initialize();
+
+  uint8_t scenes[8] = {};
+
+
+  dali_initialize(scenes);
+
   vTaskDelay(pdMS_TO_TICKS(6000));
   web_initialize(my_uid);
 }

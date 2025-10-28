@@ -13,7 +13,7 @@ extern "C" {
  * @param outQueue Queue for messages from task.
  * @param uid 64-bit Uid. Identifies switch on networks.
  */
-void web_initialize(char *uid);
+void web_initialize(char *uid, uint8_t* scenes);
 
 #ifdef __cplusplus
 }

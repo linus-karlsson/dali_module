@@ -68,7 +68,8 @@ typedef struct light_response_t
     uint8_t response;
 } light_response_t;
 
-void dali_initialize(void);
+void dali_initialize(uint8_t* scenes);
+bool dali_set_scenes(uint8_t* scenes);
 void light_control_add_interrupt(void);
 void light_control_remove_interrupt(void);
 
