@@ -43,6 +43,13 @@ void setup()
   uint32_t value_size = 0;
   lsx_nvs_get_bytes(&nvs, "Scenes", scenes, &value_size, sizeof(scenes));
 
+  printf("Dali scenes: ");
+  for (int i = 0; i < 8; i++)
+  {
+    printf("%d ", scenes[i]);
+  }
+  printf("\n");
+
   dali_initialize(scenes, &nvs);
 
   vTaskDelay(pdMS_TO_TICKS(6000));
