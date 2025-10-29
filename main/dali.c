@@ -238,7 +238,8 @@ uint8_t dali_query1(uint8_t command, uint8_t is_extended, bool* error)
   return response;
 }
 
-uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error)
+uint8_t dali_query0(uint8_t address, uint8_t command, uint8_t is_extended,
+                    bool* error)
 {
   uint32_t total_number_queries = 6;
   uint32_t count = 1;
@@ -284,6 +285,31 @@ uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error)
     }
   }
   return 0;
+}
+
+uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error_out)
+{
+  if (dali.short_address == 0)
+  {
+    return dali_query0(DALI_BROADCAST, command, is_extended, error_out);
+  }
+  else
+  {
+    bool success = false;
+    uint8_t max = 0;
+    for (uint32_t i = 0; i < dali.short_address; ++i)
+    {
+      bool error = false;
+      uint8_t current = dali_query0(i, command, is_extended, &error);
+      if (!error && (current > max))
+      {
+        max = current;
+        success = true;
+      }
+    }
+    if (error_out) *error_out = !success;
+    return max;
+  }
 }
 
 uint32_t commands_count = 0;
@@ -411,7 +437,11 @@ void dali_task(void* pvParameters)
   bool turn_off_blink = false;
   timer_ms_t turn_off_timer = timer_create_ms(10 * 1000);
 
+  bool on0 = false;
+  bool on1 = false;
   timer_ms_t send_brightness_timer = timer_create_ms(10000);
+  timer_ms_t send_brightness_timer0 = timer_create_ms(11000);
+  send_brightness_timer0.time += 2000;
 
   const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
   bool filter_value[3] = {};
@@ -419,16 +449,30 @@ void dali_task(void* pvParameters)
 
   uint32_t tick = 1;
 
+  lsx_delay_millis(delay_time);
+  dali_broadcast_twice(DALI_OFF);
+  lsx_delay_millis(delay_time);
+
   while (true)
   {
     esp_task_wdt_reset();
 
+#if 0
     if (timer_is_up_and_reset_ms(&send_brightness_timer, lsx_get_millis()))
     {
-      dali_query_(DALI_QUERY_MAX_LEVEL, false, NULL);
-      dali_query_(DALI_QUERY_MIN_LEVEL, false, NULL);
-      dali_query_(DALI_QUERY_ACTUAL_OUTPUT, false, NULL);
+        lsx_delay_millis(delay_time);
+        dali_transmit((0 << 1) | 0x01, on0 ? DALI_OFF : DALI_ON);
+        lsx_delay_millis(delay_time);
+        on0 = !on0;
     }
+    if (timer_is_up_and_reset_ms(&send_brightness_timer0, lsx_get_millis()))
+    {
+        lsx_delay_millis(delay_time);
+        dali_transmit((1 << 1) | 0x01, on1 ? DALI_OFF : DALI_ON);
+        lsx_delay_millis(delay_time);
+        on1 = !on1;
+    }
+#endif
 
 #if 0
     if (dali.set_scenes)
@@ -671,17 +715,19 @@ void dali_scan(void)
   bool still_scanning = true;
   while (still_scanning)
   {
-    while ((high_address - low_address) > 1)
+    while ((high_address - low_address) > 0)
     {
+      printf("High: %ld\n", high_address);
+      printf("Low: %ld\n", low_address);
       bool error = false;
-      for (uint32_t i = 0; i < 3; ++i)
+      for (uint32_t i = 0; i < 2; ++i)
       {
         lsx_delay_millis(delay_time);
-        dali_transmit(0xB1, (current_address >> 16) & 0xFF);
+        dali_transmit(0b10110001, (current_address >> 16) & 0xFF);
         lsx_delay_millis(delay_time);
-        dali_transmit(0xB3, (current_address >> 8) & 0xFF);
+        dali_transmit(0b10110011, (current_address >> 8) & 0xFF);
         lsx_delay_millis(delay_time);
-        dali_transmit(0xB5, current_address & 0xFF);
+        dali_transmit(0b10110101, current_address & 0xFF);
 
         lsx_delay_millis(delay_time);
         dali_transmit(0xA9, 0);
@@ -705,23 +751,25 @@ void dali_scan(void)
     }
     if (high_address != 0x00FFFFFF)
     {
-      int32_t found_address = current_address + 1;
+      int32_t found_address = current_address;
       lsx_delay_millis(delay_time);
-      dali_transmit(0xB1, (found_address >> 16) & 0xFF);
+      dali_transmit(0b10110001, (found_address >> 16) & 0xFF);
       lsx_delay_millis(delay_time);
-      dali_transmit(0xB3, (found_address >> 8) & 0xFF);
+      dali_transmit(0b10110011, (found_address >> 8) & 0xFF);
       lsx_delay_millis(delay_time);
-      dali_transmit(0xB5, found_address & 0xFF);
+      dali_transmit(0b10110101, found_address & 0xFF);
 
       lsx_delay_millis(delay_time);
-      dali_transmit(0xB5, (dali.short_address << 1) | 0x01);
+      dali_transmit(0b10110111, (dali.short_address << 1) | 0x01);
       lsx_delay_millis(delay_time);
 
-      dali_transmit(0xAB, 0);
+      dali_transmit(0b10101011, 0);
       lsx_delay_millis(delay_time);
 
-      high_address = 0x00FFFFFF;
+      printf("Found address: %ld\n", current_address);
+
       low_address = 0;
+      high_address = 0x00FFFFFF;
       current_address = (low_address + high_address) / 2;
 
       dali.short_address++;
@@ -731,6 +779,12 @@ void dali_scan(void)
       still_scanning = false;
     }
   }
+
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA1, 0);
+  lsx_delay_millis(delay_time);
+
+  printf("Short address: %u\n", dali.short_address);
 }
 
 void dali_initialize_(void)
@@ -778,6 +832,8 @@ void dali_initialize_(void)
   dali_transmit(0xA7, 0);
   lsx_delay_millis(delay_time);
 
+  dali_scan();
+
   dali_set_saved_configuration();
 }
 
@@ -791,7 +847,6 @@ uint8_t dali_scale(uint8_t procent)
 
   // lsx_log("Error: %u\n", error);
 
-#if 1
   lsx_delay_millis(delay_time);
 
   error = false;
@@ -799,9 +854,6 @@ uint8_t dali_scale(uint8_t procent)
   uint8_t max_brightness = error ? 254 : response;
 
   // lsx_log("Error: %u\n", error);
-#else
-  uint8_t max_brightness = 254;
-#endif
 
   return min_brightness + (((max_brightness - min_brightness) * procent) / 100);
 }
