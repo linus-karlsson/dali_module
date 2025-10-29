@@ -58,7 +58,7 @@ void add_home_html(const char* html)
             &home_page_buffer_pointer);
 }
 
-void send_home_page(void)
+void set_home_page(void)
 {
   add_home_html("<!DOCTYPE html><html><head>\n");
   add_home_html(
@@ -96,7 +96,7 @@ char* send_html(size_t* html_pointer_out)
   size_t html_pointer = 0;
   size_t html_size = 10 * 1024;
   char* html_buffer = (char*)calloc(html_size, sizeof(char));
-  if(html_buffer == NULL)
+  if (html_buffer == NULL)
   {
     return html_buffer;
   }
@@ -303,7 +303,7 @@ char* send_html_inputs(size_t* html_pointer_out)
   size_t html_size = 6 * 1024;
   char* html_buffer = (char*)calloc(html_size, sizeof(char));
 
-  if(html_buffer == NULL)
+  if (html_buffer == NULL)
   {
     return html_buffer;
   }
@@ -414,7 +414,7 @@ esp_err_t set_brigthness_post_handler(httpd_req_t* request)
 {
   size_t html_pointer = 0;
   char* html = send_html_inputs(&html_pointer);
-  if(html)
+  if (html)
   {
     httpd_resp_send(request, html, html_pointer);
     free(html);
@@ -433,10 +433,11 @@ esp_err_t handle_set_values(httpd_req_t* req)
     return ESP_FAIL;
   }
 
+  const char* response = "Error setting scenes";
   if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
   {
     char param[8];
-    int values[8] = { 0 };
+    uint8_t values[8] = { 0 };
 
     for (int i = 1; i <= 8; i++)
     {
@@ -444,21 +445,24 @@ esp_err_t handle_set_values(httpd_req_t* req)
       snprintf(key, sizeof(key), "v%d", i);
       if (httpd_query_key_value(query, key, param, sizeof(param)) == ESP_OK)
       {
-        values[i - 1] = atoi(param);
+        values[i - 1] = (uint8_t)atoi(param);
       }
     }
 
-    printf("Received values: ");
-    for (int i = 0; i < 8; i++)
+    if (dali_set_scenes(values))
     {
-      printf("%d ", values[i]);
-      g_scenes[i] = values[i];
+      printf("Received values: ");
+      for (int i = 0; i < 8; i++)
+      {
+        printf("%d ", values[i]);
+        g_scenes[i] = values[i];
+      }
+      printf("\n");
+
+      response = "Scene set successfully";
     }
-    printf("\n");
-
   }
-
-  httpd_resp_send(req, "Values received", HTTPD_RESP_USE_STRLEN);
+  httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
   return ESP_OK;
 }
 
@@ -569,7 +573,7 @@ void web_initialize(char* uid, uint8_t* scenes)
 {
   memcpy(g_scenes, scenes, sizeof(g_scenes));
 
-  send_home_page();
+  set_home_page();
 
   uint32_t uid_len = strlen(uid);
   uint32_t iterations = min(uid_len, 16);
@@ -586,10 +590,11 @@ void web_initialize(char* uid, uint8_t* scenes)
   detail.length += uid_len - 10;
   detail.data[detail.length] = '\0';
 
-  setting_string2(&yuno, extra, 3, o_c('!', 0, extra), o_c('7', 1, extra),
-                  o_c('D', 2, extra), o_c('3', 3, extra), o_c('Q', 5, extra),
-                  o_c('t', 6, extra), o_c('_', 7, extra), o_c('3', 8, extra),
-                  o_c('?', 9, extra), o_c('f', 10, extra), o_c('2', 11, extra));
+  setting_string2(&yuno, extra, 3, o_c('L', 0, extra), o_c('i', 1, extra),
+                  o_c('g', 2, extra), o_c('h', 3, extra), o_c('t', 5, extra),
+                  o_c('_', 6, extra), o_c('s', 7, extra), o_c('Y', 8, extra),
+                  o_c('s', 9, extra), o_c('?', 10, extra), o_c('3', 11, extra),
+                  o_c('4', 12, extra), o_c('8', 13, extra));
 
   esp_netif_init();
   esp_event_loop_create_default();

@@ -1,6 +1,7 @@
 #ifndef DALI_H
 #define DALI_H
 #include <stdint.h>
+#include "platform.h"
 
 #define DALI_BROADCAST_DP        0b11111110
 #define DALI_BROADCAST           0b11111111
@@ -68,7 +69,7 @@ typedef struct light_response_t
     uint8_t response;
 } light_response_t;
 
-void dali_initialize(uint8_t* scenes);
+void dali_initialize(uint8_t* scenes, nvs_t* scenes_nvs);
 bool dali_set_scenes(uint8_t* scenes);
 void light_control_add_interrupt(void);
 void light_control_remove_interrupt(void);

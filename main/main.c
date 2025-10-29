@@ -15,6 +15,8 @@
 
 static char my_uid[17] = {};
 
+static nvs_t nvs = {};
+
 void getUid64()
 {
   uint8_t mac[8] = {};
@@ -36,13 +38,16 @@ void setup()
   getUid64();
   lsx_nvs_initialize();
 
+  lsx_nvs_open(&nvs, "SCENES");
   uint8_t scenes[8] = {};
+  uint32_t value_size = 0;
+  lsx_nvs_get_bytes(&nvs, "Scenes", scenes, &value_size, sizeof(scenes));
 
-
-  dali_initialize(scenes);
+  dali_initialize(scenes, &nvs);
 
   vTaskDelay(pdMS_TO_TICKS(6000));
-  web_initialize(my_uid);
+
+  web_initialize(my_uid, scenes);
 }
 
 void app_main(void)

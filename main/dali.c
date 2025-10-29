@@ -1,3 +1,4 @@
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -52,6 +53,8 @@ typedef struct dali_t
   uint8_t fade_time;
   uint8_t dimming_curve;
 
+  uint8_t short_address;
+
   uint8_t current_brightness;
 
   uint8_t scenes[8];
@@ -60,6 +63,7 @@ typedef struct dali_t
   uint8_t temp_scenes[8];
 
   nvs_t nvs;
+  nvs_t* scene_nvs;
 } dali_t;
 
 static uint8_t get_input_index(bool* filter_values)
@@ -211,12 +215,13 @@ uint8_t dali_query_(uint8_t command, uint8_t is_extended, bool* error)
     dali_transmit(0xC1, 6);
     lsx_delay_millis(delay_time);
   }
+  pin_change_count = 0;
   dali_broadcast(command);
   lsx_delay_micro(10);
   return dali_receive(error);
 }
 
-uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error)
+uint8_t dali_query1(uint8_t command, uint8_t is_extended, bool* error)
 {
   uint8_t response = dali_query_(command, is_extended, error);
   if (error)
@@ -231,6 +236,54 @@ uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error)
     }
   }
   return response;
+}
+
+uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error)
+{
+  uint32_t total_number_queries = 6;
+  uint32_t count = 1;
+  uint8_t responses[6] = {};
+
+  if (error) *error = true;
+
+  for (uint32_t i = 0; i < total_number_queries; ++i)
+  {
+    bool error_temp = false;
+    responses[i] = dali_query1(command, is_extended, &error_temp);
+    if (error_temp)
+    {
+      return 0;
+    }
+#if 0
+    if((i > 0) && (responses[i - 1] == responses[i]) && ((++count) >= 4))
+    {
+        if (error) *error = false;
+        return responses[i];
+    }
+    else
+    {
+      count = 1;
+    }
+#endif
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+
+  uint32_t correct_count = 0;
+  uint8_t current_response = 0;
+  for (uint32_t i = 0; i < total_number_queries; ++i)
+  {
+    correct_count = 0;
+    current_response = responses[i];
+    for (uint32_t j = 0; j < total_number_queries; ++j)
+    {
+      if ((current_response == responses[j]) && ((++correct_count) >= 4))
+      {
+        if (error) *error = false;
+        return current_response;
+      }
+    }
+  }
+  return 0;
 }
 
 uint32_t commands_count = 0;
@@ -354,8 +407,6 @@ void dali_task(void* pvParameters)
 {
   esp_task_wdt_add(NULL);
 
-  dali_initialize_();
-
   bool turn_off_sequence = false;
   bool turn_off_blink = false;
   timer_ms_t turn_off_timer = timer_create_ms(10 * 1000);
@@ -363,6 +414,7 @@ void dali_task(void* pvParameters)
   timer_ms_t send_brightness_timer = timer_create_ms(10000);
 
   const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+  bool filter_value[3] = {};
   uint8_t filter_count[3] = {};
 
   uint32_t tick = 1;
@@ -371,10 +423,28 @@ void dali_task(void* pvParameters)
   {
     esp_task_wdt_reset();
 
+    if (timer_is_up_and_reset_ms(&send_brightness_timer, lsx_get_millis()))
+    {
+      dali_query_(DALI_QUERY_MAX_LEVEL, false, NULL);
+      dali_query_(DALI_QUERY_MIN_LEVEL, false, NULL);
+      dali_query_(DALI_QUERY_ACTUAL_OUTPUT, false, NULL);
+    }
+
+#if 0
     if (dali.set_scenes)
     {
       memcpy(dali.scenes, dali.temp_scenes, sizeof(dali.scenes));
+      memset(dali.temp_scenes, 0, sizeof(dali.temp_scenes));
+      lsx_nvs_set_bytes(dali.scene_nvs, "Scenes", dali.scenes, sizeof(dali.scenes));
+
       dali.set_scenes = false;
+
+      printf("Dali scenes: ");
+      for (int i = 0; i < 8; i++)
+      {
+        printf("%d ", dali.scenes[i]);
+      }
+      printf("\n");
     }
 
     for (uint32_t i = 0; i < array_size(filter_count); ++i)
@@ -404,9 +474,9 @@ void dali_task(void* pvParameters)
         {
           if (dali.current_brightness != 0)
           {
-            if(!turn_off_sequence)
+            if (!turn_off_sequence)
             {
-              dali_send_brightness(10);
+              dali_send_brightness(1);
               turn_off_timer.time = lsx_get_millis();
               turn_off_sequence = true;
               turn_off_blink = true;
@@ -428,13 +498,12 @@ void dali_task(void* pvParameters)
 
     if (turn_off_sequence)
     {
-      printf("%lu turn off sequence\n", tick);
       uint32_t ms = lsx_get_millis();
       if (turn_off_blink)
       {
-        if ((ms - turn_off_timer.time) >= (uint32_t)((float)(dali.fade_time) * 1000.0f * 0.52f))
+        if ((ms - turn_off_timer.time) >=
+            (uint32_t)((float)(dali.fade_time) * 1000.0f * 0.52f))
         {
-          printf("%lu blank\n", tick);
           dali_send_brightness(dali.current_brightness);
           turn_off_blink = false;
         }
@@ -452,6 +521,7 @@ void dali_task(void* pvParameters)
     {
       dali_send_brightness(dali.current_brightness);
     }
+#endif
     vTaskDelay(pdMS_TO_TICKS(500));
     tick++;
   }
@@ -495,17 +565,18 @@ void dali_transmit(uint8_t address, uint8_t command)
   lsx_gpio_write(dali.tx_pin, LSX_GPIO_LOW);
 }
 
-uint8_t dali_receive(bool* error)
+uint8_t dali_receive_(bool* error, uint32_t delay)
 {
   interupt_timemark = lsx_get_micro();
   pin_change_count = 0;
 
   if (error) *error = true;
 
+#if 1
   uint32_t start = lsx_get_micro();
   while (pin_change_count < 9)
   {
-    if ((lsx_get_micro() - start) >= 100000)
+    if ((lsx_get_micro() - start) >= delay)
     {
       return 0;
     }
@@ -518,6 +589,19 @@ uint8_t dali_receive(bool* error)
     response |= (!(pin_change_buffer[i])) << (8 - i);
   }
   return response;
+#else
+  uint32_t start = lsx_get_micro();
+  while ((lsx_get_micro() - start) < 200000)
+  {
+  }
+  printf("PIN change: %lu\n", pin_change_count);
+  return 0;
+#endif
+}
+
+uint8_t dali_receive(bool* error)
+{
+  return dali_receive_(error, 100000);
 }
 
 void dali_set_DTR0(uint8_t value)
@@ -552,7 +636,6 @@ static void dali_set_saved_configuration(void)
     uint8_t current_fade_rate = fade_time_rate & 0x0F;
     if (dali.fade_time != current_fade_time)
     {
-      printf("Fade time: %u\n", dali.fade_time);
       dali_set_DTR0(dali.fade_time);
       lsx_delay_millis(delay_time);
       dali_broadcast_twice(DALI_SET_FADE_TIME);
@@ -577,6 +660,79 @@ static void dali_set_saved_configuration(void)
   }
 }
 
+void dali_scan(void)
+{
+  int32_t low_address = 0;
+  int32_t high_address = 0x00FFFFFF;
+  int32_t current_address = (int32_t)(low_address + high_address) / 2;
+
+  dali.short_address = 0;
+
+  bool still_scanning = true;
+  while (still_scanning)
+  {
+    while ((high_address - low_address) > 1)
+    {
+      bool error = false;
+      for (uint32_t i = 0; i < 3; ++i)
+      {
+        lsx_delay_millis(delay_time);
+        dali_transmit(0xB1, (current_address >> 16) & 0xFF);
+        lsx_delay_millis(delay_time);
+        dali_transmit(0xB3, (current_address >> 8) & 0xFF);
+        lsx_delay_millis(delay_time);
+        dali_transmit(0xB5, current_address & 0xFF);
+
+        lsx_delay_millis(delay_time);
+        dali_transmit(0xA9, 0);
+        dali_receive_(&error, 50000);
+        if (!error)
+        {
+          break;
+        }
+      }
+
+      if (error)
+      {
+        low_address = current_address + 1;
+      }
+      else
+      {
+        high_address = current_address;
+      }
+
+      current_address = (int32_t)(low_address + high_address) / 2;
+    }
+    if (high_address != 0x00FFFFFF)
+    {
+      int32_t found_address = current_address + 1;
+      lsx_delay_millis(delay_time);
+      dali_transmit(0xB1, (found_address >> 16) & 0xFF);
+      lsx_delay_millis(delay_time);
+      dali_transmit(0xB3, (found_address >> 8) & 0xFF);
+      lsx_delay_millis(delay_time);
+      dali_transmit(0xB5, found_address & 0xFF);
+
+      lsx_delay_millis(delay_time);
+      dali_transmit(0xB5, (dali.short_address << 1) | 0x01);
+      lsx_delay_millis(delay_time);
+
+      dali_transmit(0xAB, 0);
+      lsx_delay_millis(delay_time);
+
+      high_address = 0x00FFFFFF;
+      low_address = 0;
+      current_address = (low_address + high_address) / 2;
+
+      dali.short_address++;
+    }
+    else
+    {
+      still_scanning = false;
+    }
+  }
+}
+
 void dali_initialize_(void)
 {
   lsx_log("Dali init\n");
@@ -598,6 +754,30 @@ void dali_initialize_(void)
   lsx_gpio_install_interrupt_service();
   lsx_gpio_add_pin_interrput(dali.rx_pin, pin_change, NULL);
 
+  lsx_delay_millis(delay_time);
+  dali_set_DTR0(0);
+  lsx_delay_millis(delay_time);
+  dali_broadcast_twice(DALI_SET_MIN_LEVEL);
+  lsx_delay_millis(delay_time);
+
+  lsx_delay_millis(delay_time);
+  dali_set_DTR0(254);
+  lsx_delay_millis(delay_time);
+  dali_broadcast_twice(DALI_SET_MAX_LEVEL);
+  lsx_delay_millis(delay_time);
+
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA5, 0);
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA5, 0);
+  lsx_delay_millis(delay_time);
+
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA7, 0);
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA7, 0);
+  lsx_delay_millis(delay_time);
+
   dali_set_saved_configuration();
 }
 
@@ -609,15 +789,19 @@ uint8_t dali_scale(uint8_t procent)
   uint8_t response = dali_query(DALI_QUERY_MIN_LEVEL, 0, &error);
   uint8_t min_brightness = error ? 170 : response;
 
-  lsx_log("Error: %u\n", error);
+  // lsx_log("Error: %u\n", error);
 
+#if 1
   lsx_delay_millis(delay_time);
 
   error = false;
   response = dali_query(DALI_QUERY_MAX_LEVEL, 0, &error);
   uint8_t max_brightness = error ? 254 : response;
 
-  lsx_log("Error: %u\n", error);
+  // lsx_log("Error: %u\n", error);
+#else
+  uint8_t max_brightness = 254;
+#endif
 
   return min_brightness + (((max_brightness - min_brightness) * procent) / 100);
 }
@@ -641,70 +825,13 @@ void dali_set_brightness_(uint8_t brightness)
   lsx_delay_millis(delay_time);
 }
 
-uint32_t light_control_light_source_to_tring(uint8_t light_source, char* result)
-{
-  const char* value = "Error";
-  switch (light_source)
-  {
-    case 0:
-    {
-      value = "Low Pressure Fluorescent";
-      break;
-    }
-    case 2:
-    {
-      value = "HID";
-      break;
-    }
-    case 3:
-    {
-      value = "Low Voltage Halogen";
-      break;
-    }
-    case 4:
-    {
-      value = "Incandescent";
-      break;
-    }
-    case 6:
-    {
-      value = "LED";
-      break;
-    }
-    case 7:
-    {
-      value = "OLED";
-      break;
-    }
-    case 252:
-    {
-      value = "Other";
-      break;
-    }
-    case 253:
-    {
-      value = "Unknown";
-      break;
-    }
-    case 254:
-    {
-      value = "No Light Source";
-      break;
-    }
-    case 255:
-    {
-      value = "Multiple";
-      break;
-    }
-  }
-  uint32_t len = strlen(value);
-  memcpy(result, value, len);
-  return len;
-}
-
-void dali_initialize(uint8_t* scenes)
+void dali_initialize(uint8_t* scenes, nvs_t* scenes_nvs)
 {
   memcpy(dali.scenes, scenes, sizeof(dali.scenes));
+
+  dali.scene_nvs = scenes_nvs;
+
+  dali_initialize_();
 
   xTaskCreateStatic(dali_task, "DALI Task", DALI_STACK_SIZE, NULL, 3, dali_stack,
                     &dali_stack_type);
