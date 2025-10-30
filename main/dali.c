@@ -260,7 +260,7 @@ uint8_t dali_query0(uint8_t address, uint8_t command, uint8_t is_extended,
     if ((i > 0) && (responses[i - 1] == responses[i]) && ((++count) >= 4))
     {
       if (error) *error = false;
-      printf("Query: %u\n", responses[i]);
+      lsx_log("Query: %u\n", responses[i]);
       return responses[i];
     }
     else
@@ -282,7 +282,7 @@ uint8_t dali_query0(uint8_t address, uint8_t command, uint8_t is_extended,
       if ((current_response == responses[j]) && ((++correct_count) >= 4))
       {
         if (error) *error = false;
-        printf("Query: %u\n", current_response);
+        lsx_log("Query: %u\n", current_response);
         return current_response;
       }
     }
@@ -313,7 +313,7 @@ uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error_out)
     }
     if (!success)
     {
-      printf("BAD\n");
+      lsx_log("BAD\n");
       result = dali_query0(DALI_BROADCAST, command, is_extended, error_out);
     }
     else
@@ -446,135 +446,6 @@ static bool check_input(uint8_t pin, bool* filter_value_out,
   return true;
 }
 
-void dali_task(void* pvParameters)
-{
-  esp_task_wdt_add(NULL);
-
-  bool turn_off_sequence = false;
-  bool turn_off_blink = false;
-  timer_ms_t turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
-
-  timer_ms_t send_brightness_timer = timer_create_ms(10000);
-
-  timer_ms_t check_input_timer = timer_create_ms(500);
-
-  const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
-  bool filter_value[3] = {};
-  uint8_t filter_count[3] = {};
-
-  uint32_t tick = 1;
-
-  while (true)
-  {
-    esp_task_wdt_reset();
-
-#if 1
-    if (dali.set_config)
-    {
-      dali.config = dali.temp_config;
-      memset(&dali.temp_config, 0, sizeof(dali.temp_config));
-      lsx_nvs_set_uint8_ram(dali.scene_nvs, "BEnable", dali.config.blink_enabled);
-      lsx_nvs_set_uint32_ram(dali.scene_nvs, "BDuration", dali.config.blink_duration);
-      lsx_nvs_set_bytes_ram(dali.scene_nvs, "Scenes", dali.config.scenes,
-                        sizeof(dali.config.scenes));
-      lsx_nvs_commit(dali.scene_nvs);
-
-      printf("Dali scenes: ");
-      for (int i = 0; i < 8; i++)
-      {
-        printf("%d ", dali.config.scenes[i]);
-      }
-      printf("\n");
-
-      dali.set_config = false;
-    }
-
-    if (timer_is_up_and_reset_ms(&check_input_timer, lsx_get_millis()))
-    {
-      for (uint32_t i = 0; i < array_size(filter_count); ++i)
-      {
-#if 0
-      if (!check_input(dali_input_pins[i], filter_value + i, filter_count + i))
-      {
-        memset(filter_count, 0, sizeof(filter_count));
-        break;
-      }
-#else
-        if (!check_input(i, filter_value + i, filter_count + i))
-        {
-          memset(filter_count, 0, sizeof(filter_count));
-          break;
-        }
-#endif
-      }
-    }
-
-    if ((filter_count[0] >= filter_total_count) &&
-        (filter_count[1] >= filter_total_count) &&
-        (filter_count[2] >= filter_total_count))
-    {
-      memset(filter_count, 0, sizeof(filter_count));
-
-      uint8_t brightness = dali.config.scenes[get_input_index(filter_value)];
-      if (brightness != dali.current_brightness)
-      {
-        send_brightness_timer.time = lsx_get_millis();
-        if (brightness == 0)
-        {
-          if (dali.current_brightness != 0)
-          {
-            if (dali.config.blink_enabled && !turn_off_sequence)
-            {
-              dali_send_brightness(1);
-              turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
-              turn_off_sequence = true;
-              turn_off_blink = true;
-            }
-          }
-        }
-        else
-        {
-          turn_off_sequence = false;
-          turn_off_blink = false;
-        }
-        if (!dali.config.blink_enabled || !turn_off_sequence)
-        {
-          dali_send_brightness(brightness);
-          dali.current_brightness = brightness;
-        }
-      }
-    }
-
-    if (dali.config.blink_enabled && turn_off_sequence)
-    {
-      uint32_t ms = lsx_get_millis();
-      if (turn_off_blink)
-      {
-        if ((ms - turn_off_timer.time) >=
-            (uint32_t)((float)(dali.fade_time) * 1000.0f * 0.30f))
-        {
-          dali_send_brightness(dali.current_brightness);
-          turn_off_blink = false;
-        }
-      }
-      turn_off_sequence = !timer_is_up_ms(turn_off_timer, ms);
-      if (!turn_off_sequence)
-      {
-        dali.current_brightness = 0;
-      }
-    }
-    turn_off_blink = turn_off_blink && turn_off_sequence;
-
-    if (!turn_off_blink &&
-        timer_is_up_and_reset_ms(&send_brightness_timer, lsx_get_millis()))
-    {
-      dali_send_brightness(dali.current_brightness);
-    }
-#endif
-    vTaskDelay(pdMS_TO_TICKS(100));
-    tick++;
-  }
-}
 
 void dali_send_bit(uint8_t bit)
 {
@@ -621,7 +492,6 @@ uint8_t dali_receive_(bool* error, uint32_t delay)
 
   if (error) *error = true;
 
-#if 1
   uint32_t start = lsx_get_micro();
   while (pin_change_count < 9)
   {
@@ -638,14 +508,6 @@ uint8_t dali_receive_(bool* error, uint32_t delay)
     response |= (!(pin_change_buffer[i])) << (8 - i);
   }
   return response;
-#else
-  uint32_t start = lsx_get_micro();
-  while ((lsx_get_micro() - start) < 200000)
-  {
-  }
-  printf("PIN change: %lu\n", pin_change_count);
-  return 0;
-#endif
 }
 
 uint8_t dali_receive(bool* error)
@@ -688,6 +550,7 @@ static void dali_set_saved_configuration(void)
   lsx_nvs_get_uint8(&dali.nvs, "DC", &dali.dimming_curve, DALI_DIMMING_LOGARITHMIC);
 
   dali.dimming_curve = DALI_DIMMING_LOGARITHMIC;
+  //dali.dimming_curve = DALI_DIMMING_LINEAR;
   dali_set_DTR0(dali.dimming_curve);
   lsx_delay_millis(delay_time);
   dali_transmit(0xC1, 6);
@@ -707,10 +570,10 @@ void dali_scan(void)
   {
     while ((high_address - low_address) > 0)
     {
-      printf("High: %ld\n", high_address);
-      printf("Low:  %ld\n", low_address);
+      lsx_log("High: %ld\n", high_address);
+      lsx_log("Low:  %ld\n", low_address);
       bool error = false;
-      for (uint32_t i = 0; i < 3; ++i)
+      for (uint32_t i = 0; i < 1; ++i)
       {
         lsx_delay_millis(delay_time);
         dali_transmit(0xB1, (current_address >> 16) & 0xFF);
@@ -756,7 +619,7 @@ void dali_scan(void)
       dali_transmit(0xAB, 0);
       lsx_delay_millis(delay_time);
 
-      printf("Found address: %ld\n", current_address);
+      lsx_log("Found address: %ld\n", current_address);
 
       low_address = 0;
       high_address = 0x00FFFFFF;
@@ -774,7 +637,7 @@ void dali_scan(void)
   dali_transmit(0xA1, 0);
   lsx_delay_millis(delay_time);
 
-  printf("Short address: %u\n", dali.short_address);
+  lsx_log("Short address: %u\n", dali.short_address);
 }
 
 void dali_initialize_(void)
@@ -835,12 +698,11 @@ uint8_t dali_scale(uint8_t procent)
   uint8_t response = dali_query(DALI_QUERY_MIN_LEVEL, 0, &error);
   uint8_t min_brightness = error ? 170 : response;
 
-  printf("Min: %u\n", min_brightness);
+  lsx_log("Min: %u\n", min_brightness);
 
   lsx_delay_millis(delay_time);
 
   uint8_t max_brightness = 254;
-
   return min_brightness + (((max_brightness - min_brightness) * procent) / 100);
 }
 
@@ -861,6 +723,128 @@ void dali_set_brightness_(uint8_t brightness)
   lsx_delay_millis(delay_time);
   dali_transmit(DALI_BROADCAST_DP, brightness);
   lsx_delay_millis(delay_time);
+}
+
+void dali_task(void* pvParameters)
+{
+  esp_task_wdt_add(NULL);
+
+  bool turn_off_sequence = false;
+  bool turn_off_blink = false;
+  timer_ms_t turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
+  timer_ms_t send_brightness_timer = timer_create_ms(10000);
+  timer_ms_t check_input_timer = timer_create_ms(500);
+
+  const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+  bool filter_value[3] = {};
+  uint8_t filter_count[3] = {};
+
+  while (true)
+  {
+    esp_task_wdt_reset();
+
+    if (dali.set_config)
+    {
+      dali.config = dali.temp_config;
+      memset(&dali.temp_config, 0, sizeof(dali.temp_config));
+      lsx_nvs_set_uint8_ram(dali.scene_nvs, "BEnable", dali.config.blink_enabled);
+      lsx_nvs_set_uint32_ram(dali.scene_nvs, "BDuration", dali.config.blink_duration);
+      lsx_nvs_set_bytes_ram(dali.scene_nvs, "Scenes", dali.config.scenes,
+                        sizeof(dali.config.scenes));
+      lsx_nvs_commit(dali.scene_nvs);
+
+      lsx_log("Dali scenes: ");
+      for (int i = 0; i < 8; i++)
+      {
+        lsx_log("%d ", dali.config.scenes[i]);
+      }
+      lsx_log("\n");
+
+      dali.set_config = false;
+    }
+
+    if (timer_is_up_and_reset_ms(&check_input_timer, lsx_get_millis()))
+    {
+      for (uint32_t i = 0; i < array_size(filter_count); ++i)
+      {
+#if 0
+      if (!check_input(dali_input_pins[i], filter_value + i, filter_count + i))
+      {
+        memset(filter_count, 0, sizeof(filter_count));
+        break;
+      }
+#else
+        if (!check_input(i, filter_value + i, filter_count + i))
+        {
+          memset(filter_count, 0, sizeof(filter_count));
+          break;
+        }
+#endif
+      }
+    }
+
+    if ((filter_count[0] >= filter_total_count) &&
+        (filter_count[1] >= filter_total_count) &&
+        (filter_count[2] >= filter_total_count))
+    {
+      memset(filter_count, 0, sizeof(filter_count));
+
+      uint8_t brightness = dali.config.scenes[get_input_index(filter_value)];
+      if (brightness != dali.current_brightness)
+      {
+        send_brightness_timer.time = lsx_get_millis();
+        if (brightness == 0)
+        {
+          if (dali.current_brightness != 0)
+          {
+            if (dali.config.blink_enabled && !turn_off_sequence)
+            {
+              dali_send_brightness(1);
+              turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
+              turn_off_sequence = true;
+              turn_off_blink = true;
+            }
+          }
+        }
+        else
+        {
+          turn_off_sequence = false;
+          turn_off_blink = false;
+        }
+        if (!dali.config.blink_enabled || !turn_off_sequence)
+        {
+          dali_send_brightness(dali.current_brightness = brightness);
+        }
+      }
+    }
+
+    if (dali.config.blink_enabled && turn_off_sequence)
+    {
+      uint32_t ms = lsx_get_millis();
+      if (turn_off_blink)
+      {
+        if ((ms - turn_off_timer.time) >=
+            (uint32_t)((float)(dali.fade_time) * 1000.0f * 0.30f))
+        {
+          dali_send_brightness(dali.current_brightness);
+          turn_off_blink = false;
+        }
+      }
+      turn_off_sequence = !timer_is_up_ms(turn_off_timer, ms);
+      if (!turn_off_sequence)
+      {
+        dali_send_brightness(dali.current_brightness = 0);
+      }
+    }
+    turn_off_blink = turn_off_blink && turn_off_sequence;
+
+    if (!turn_off_blink &&
+        timer_is_up_and_reset_ms(&send_brightness_timer, lsx_get_millis()))
+    {
+      dali_send_brightness(dali.current_brightness);
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
 }
 
 void dali_initialize(nvs_t* scenes_nvs, dali_config_t config)

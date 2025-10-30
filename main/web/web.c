@@ -66,19 +66,27 @@ void set_home_page(void)
   add_home_html("<title>DALI</title>\n");
   add_home_html("<style>\n");
   add_home_html(
-    "body { display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; margin:0; background-color:#f5f5f5; font-family:Arial,sans-serif; }\n");
+    "body { display:flex; flex-direction:column; justify-content:center; align-items:center; "
+    "height:100vh; margin:0; background-color:#121212; color:#E0E0E0; "
+    "font-family:Arial,sans-serif; }\n");
+
   add_home_html(
-    "#main { width:90%; max-width:400px; background:white; padding:20px; border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,0.1); display:flex; flex-direction:column; gap:20px; align-items:center; }\n");
+    "#main { width:90%; max-width:400px; background:#1E1E1E; padding:20px; border-radius:12px; "
+    "box-shadow:0 4px 10px rgba(0,0,0,0.6); display:flex; flex-direction:column; "
+    "gap:20px; align-items:center; }\n");
+
   add_home_html(
-    "button { width:100%; background:#2196F3; color:white; border:none; padding:15px; border-radius:5px; font-size:18px; cursor:pointer; }\n");
-  add_home_html("button:hover { background:#1976D2; }\n");
+    "button { width:100%; background:#2196F3; color:white; border:none; padding:15px; "
+    "border-radius:6px; font-size:18px; cursor:pointer; transition:background 0.2s ease, transform 0.1s ease; }\n");
+
+  add_home_html("button:hover { background:#1976D2; transform:scale(1.02); }\n");
 
   add_home_html("</style></head><body>\n");
 
   add_home_html("<div id='main'>\n");
   add_home_html("<h2 style='color:#2196F3;'>DALI</h2>\n");
   add_home_html(
-    "<button onclick=\"window.location.href='/setPage'\">Set Values</button>\n");
+    "<button onclick=\"window.location.href='/setPage'\">Set Scenes</button>\n");
   add_home_html(
     "<button onclick=\"window.location.href='/updatePage'\">Update Firmware</button>\n");
   add_home_html("</div>\n");
@@ -106,72 +114,92 @@ char* send_html(size_t* html_pointer_out)
     "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
   add_html_d("<title>Update</title>\n");
   add_html_d("<style>\n");
+
   add_html_d(
-    "body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }\n");
+    ".background-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); "
+    "width: 95%; max-width: 500px; background: rgba(30, 30, 30, 0.95); "
+    "border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.7); "
+    "padding: 30px; display: flex; flex-direction: column; align-items: center; "
+    "backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); }\n");
+
   add_html_d(
-    "#upload-form { width: 90%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; gap: 10px; align-items: center; }\n");
+    "body { display: flex; flex-direction: column; justify-content: center; align-items: center; "
+    "height: 100vh; margin: 0; background-color: #121212; color: #E0E0E0; "
+    "font-family: Arial, sans-serif; }\n");
+
   add_html_d(
-    "input[type='file'] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }\n");
+    "#upload-form { width: 90%; max-width: 400px; background: #1E1E1E; padding: 20px; "
+    "border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.6); display: flex; "
+    "flex-direction: column; gap: 15px; align-items: center; }\n");
+
   add_html_d(
-    "input[type='submit'] { background: #2196F3; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; width: 100%; }\n");
+    "input[type='file'] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #555; "
+    "border-radius: 6px; background: #2A2A2A; color: #E0E0E0; }\n");
+  add_html_d(
+    "input[type='file']::file-selector-button { background: #2196F3; color: white; border: none; "
+    "padding: 8px 12px; border-radius: 5px; cursor: pointer; }\n");
+  add_html_d(
+    "input[type='file']::file-selector-button:hover { background: #1976D2; }\n");
+
+  add_html_d(
+    "input[type='submit'] { background: #2196F3; color: white; border: none; padding: 12px 20px; "
+    "border-radius: 6px; cursor: pointer; font-size: 18px; width: 100%; transition: background 0.2s ease; }\n");
   add_html_d("input[type='submit']:hover { background: #1976D2; }\n");
+
   add_html_d(
-    "#prg-container { width: 90%; max-width: 400px; background-color: #e0e0e0; border-radius: 8px; overflow: hidden; margin-top: 10px; }\n");
+    "#prg-container { width: 90%; max-width: 400px; background-color: #2A2A2A; border-radius: 8px; "
+    "overflow: hidden; margin-top: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }\n");
   add_html_d(
-    "#prg { width: 0%; background-color: #2196F3; padding: 10px; color: white; text-align: center; font-size: 16px; transition: width 0.3s ease-in-out; }\n");
+    "#prg { width: 0%; background-color: #2196F3; padding: 10px; color: white; text-align: center; "
+    "font-size: 16px; transition: width 0.3s ease-in-out; }\n");
+
   add_html_d(".dropdown { width: 90%; max-width: 400px; margin-bottom: 10px; }\n");
   add_html_d(
-    ".dropdown button { width: 100%; padding: 10px; font-size: 18px; border: none; background-color: #3498db; color: white; border-radius: 5px; cursor: pointer; }\n");
+    ".dropdown button { width: 100%; padding: 10px; font-size: 18px; border: none; background-color: #2196F3; "
+    "color: white; border-radius: 6px; cursor: pointer; transition: background 0.2s ease; }\n");
+  add_html_d(".dropdown button:hover { background-color: #1976D2; }\n");
   add_html_d(
-    ".dropdown-content { display: none; flex-direction: column; gap: 5px; padding: 10px; background: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }\n");
+    ".dropdown-content { display: none; flex-direction: column; gap: 5px; padding: 10px; background: #1E1E1E; "
+    "border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.6); }\n");
   add_html_d(
-    ".dropdown-content a { text-align: center; padding: 10px; font-size: 16px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; }\n");
-  add_html_d(".dropdown-content a:hover { background: #2980b9; }\n");
+    ".dropdown-content a { text-align: center; padding: 10px; font-size: 16px; text-decoration: none; "
+    "color: white; background: #2196F3; border-radius: 5px; transition: background 0.2s ease; }\n");
+  add_html_d(".dropdown-content a:hover { background: #1976D2; }\n");
 
   add_html_d(
-    "#brightness-slider { width: 90%; max-width: 500px; height: 20px; appearance: none; background: #ddd; border-radius: 10px; outline: none; transition: background 0.3s; }\n");
+    "#brightness-slider { width: 90%; max-width: 500px; height: 20px; appearance: none; "
+    "background: #2A2A2A; border-radius: 10px; outline: none; transition: background 0.3s; }\n");
+  add_html_d(
+    "#brightness-slider::-webkit-slider-thumb { appearance: none; width: 30px; height: 30px; "
+    "background: #2196F3; border-radius: 50%; cursor: pointer; }\n");
+  add_html_d(
+    "#brightness-slider::-moz-range-thumb { width: 30px; height: 30px; background: #2196F3; "
+    "border-radius: 50%; cursor: pointer; }\n");
 
   add_html_d(
-    "#brightness-slider::-webkit-slider-thumb { appearance: none; width: 30px; height: 30px; background: #3498db; border-radius: 50%; cursor: pointer; }\n");
+    "#file-input { width: 90%; max-width: 400px; font-size: 16px; padding: 12px; "
+    "border: 1px solid #555; border-radius: 6px; margin-top: 10px; background: #2A2A2A; color: #E0E0E0; }\n");
 
   add_html_d(
-    "#brightness-slider::-moz-range-thumb { width: 30px; height: 30px; background: #3498db; border-radius: 50%; cursor: pointer; }\n");
-
-  add_html_d("  #file-input {\n");
-  add_html_d("    width: 90%;\n");
-  add_html_d("    max-width: 400px;\n");
-  add_html_d("    font-size: 16px;\n");
-  add_html_d("    padding: 12px;\n");
-  add_html_d("    border: 1px solid #ccc;\n");
-  add_html_d("    border-radius: 5px;\n");
-  add_html_d("    margin-top: 10px;\n");
-  add_html_d("  }\n");
-  add_html_d("  #update-button {\n");
-  add_html_d("    width: 90%;\n");
-  add_html_d("    max-width: 400px;\n");
-  add_html_d("    background-color: #2196F3;\n");
-  add_html_d("    color: white;\n");
-  add_html_d("    border: none;\n");
-  add_html_d("    padding: 12px 20px;\n");
-  add_html_d("    border-radius: 5px;\n");
-  add_html_d("    font-size: 18px;\n");
-  add_html_d("    cursor: pointer;\n");
-  add_html_d("    margin-top: 10px;\n");
-  add_html_d("  }\n");
-  add_html_d("  #update-button:hover {\n");
-  add_html_d("    background-color: #1976D2;\n");
-  add_html_d("  }\n");
+    "#update-button { width: 90%; max-width: 400px; background-color: #2196F3; color: white; "
+    "border: none; padding: 12px 20px; border-radius: 6px; font-size: 18px; cursor: pointer; "
+    "margin-top: 10px; transition: background 0.2s ease; }\n");
+  add_html_d("#update-button:hover { background-color: #1976D2; }\n");
 
   add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
   add_html_d(
-    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
+    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; "
+    "border-radius: 5px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }\n");
   add_html_d(
-    ".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
+    ".menu-content { display: none; flex-direction: column; background: #1E1E1E; border-radius: 10px; "
+    "box-shadow: 0 4px 8px rgba(0,0,0,0.6); margin-top: 10px; }\n");
   add_html_d(
-    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
+    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #2196F3; "
+    "border-radius: 5px; margin: 5px; text-align: center; transition: background 0.2s ease; }\n");
   add_html_d(".menu-content a:hover { background: #1976D2; }\n");
 
   add_html_d("</style>\n");
+
   add_html_d("</head>\n");
   add_html_d("<body>\n");
 
@@ -181,6 +209,9 @@ char* send_html(size_t* html_pointer_out)
   add_html_d("<a href='/'>Home</a>\n");
   add_html_d("<a href='/setPage'>Set Page</a>\n");
   add_html_d("</div></div>\n");
+
+ add_html_d("<div class='background-card'>\n");
+
 
   add_html_d("<div class='dropdown'>\n");
   add_html_d("<button onclick=\"toggleDropdown()\">Controls</button>\n");
@@ -221,6 +252,8 @@ char* send_html(size_t* html_pointer_out)
   add_html_d("<div id='prg-container'>\n");
   add_html_d("<div id='prg'>0%</div>\n");
   add_html_d("</div>\n");
+
+ add_html_d("</div>\n"); 
 
   add_html_d("<script>\n");
 
@@ -300,7 +333,7 @@ char* send_html_inputs(size_t* html_pointer_out)
   (*html_pointer_out) = 0;
 
   size_t html_pointer = 0;
-  size_t html_size = 7 * 1024;
+  size_t html_size = 10 * 1024;
   char* html_buffer = (char*)calloc(html_size, sizeof(char));
 
   if (html_buffer == NULL)
@@ -311,29 +344,65 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d("<!DOCTYPE html><html>\n");
   add_html_d(
     "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
-  add_html_d("<title>Number Inputs</title>\n");
+  add_html_d("<title>Scene Config</title>\n");
   add_html_d("<style>\n");
+
+  /* Base page layout */
   add_html_d(
-    "body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f5f5f5; font-family: Arial, sans-serif; }\n");
+    "body { display: flex; flex-direction: column; justify-content: center; align-items: center; "
+    "height: 100vh; margin: 0; background-color: #121212; color: #E0E0E0; "
+    "font-family: Arial, sans-serif; }\n");
+
+  /* Main container */
   add_html_d(
-    "#input-list { width: 90%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }\n");
+    "#input-list { width: 90%; max-width: 450px; background: #1E1E1E; padding: 20px; "
+    "border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 20px; }\n");
+
+  /* Section cards */
+  add_html_d(
+    ".section-box { background: #2A2A2A; padding: 20px; border-radius: 15px; "
+    "box-shadow: 0 4px 10px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box; }\n");
+  add_html_d(".section-box + .section-box { margin-top: 25px; }\n");
+  add_html_d(
+    ".section-box h2 { text-align: center; color: #64B5F6; margin-top: 0; }\n");
+
+  /* Input items */
   add_html_d(
     ".input-item { display: flex; justify-content: space-between; align-items: center; }\n");
-  add_html_d(".input-item label { font-size: 16px; color: #333; }\n");
+  add_html_d(".input-item label { font-size: 16px; color: #E0E0E0; }\n");
   add_html_d(
-    ".input-item input { width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 5px; text-align: center; font-size: 16px; }\n");
+    ".input-item input { width: 100px; padding: 8px; border: 1px solid #555; "
+    "border-radius: 5px; text-align: center; font-size: 16px; background: #1E1E1E; color: #E0E0E0; }\n");
+  add_html_d(".input-item input:focus { outline: none; border-color: #64B5F6; }\n");
+
+  /* Submit button */
   add_html_d(
-    "#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 15px; }\n");
+    "#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; "
+    "border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 15px; transition: background 0.2s ease; }\n");
   add_html_d("#submit-btn:hover { background: #1976D2; }\n");
 
+  /* Sidebar + menu */
   add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
   add_html_d(
-    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
+    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; "
+    "border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
   add_html_d(
-    ".menu-content { display: none; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 10px; }\n");
+    ".menu-content { display: none; flex-direction: column; background: #1E1E1E; border-radius: 10px; "
+    "box-shadow: 0 4px 8px rgba(0,0,0,0.4); margin-top: 10px; }\n");
   add_html_d(
-    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #3498db; border-radius: 5px; margin: 5px; text-align: center; }\n");
+    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; "
+    "background: #2196F3; border-radius: 5px; margin: 5px; text-align: center; transition: background 0.2s ease; }\n");
   add_html_d(".menu-content a:hover { background: #1976D2; }\n");
+
+  /* Bit display circles */
+  add_html_d(
+    ".bit-display { display: flex; gap: 6px; margin-left: 6px; }\n"
+    ".circle { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #999; display: inline-block; }\n"
+    ".circle.filled { background-color: #64B5F6; border-color: #64B5F6; }\n"
+    ".circle.empty { background-color: transparent; border-color: #555; }\n");
+
+  /* Bit explanation text */
+  add_html_d(".bit-explanation h3 { color: #64B5F6; margin-bottom: 8px; }\n");
 
   add_html_d("</style>\n");
   add_html_d("</head>\n<body>\n");
@@ -347,16 +416,20 @@ char* send_html_inputs(size_t* html_pointer_out)
 
   add_html_d("<div id='input-list'>\n");
 
-  add_html_d("<div class='input-item'><label for='blinkEnable'>Enable Turn Off Blink:</label>");
+  add_html_d("<div class='section-box'>\n");
+  add_html_d("<h2>Turn Off Blink</h2>\n");
+
+  add_html_d("<div class='input-item'><label for='blinkEnable'>Enable:</label>");
   if (g_config.blink_enabled)
   {
-    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable' checked></div>\n");
+    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable' checked>");
   }
   else
   {
-    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable'></div>\n");
+    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable'>");
   }
-  add_html_d("<div class='input-item'><label for='blinkTimer'>Blink timer (s):</label>");
+
+  add_html_d("<label for='blinkTimer'>Duration (s):</label>");
 
   {
     string256_t temp = {};
@@ -365,24 +438,52 @@ char* send_html_inputs(size_t* html_pointer_out)
       "<input type='number' id='blinkTimer' name='blinkTimer' min='0' max='1200' value='%lu'></div>\n",
       g_config.blink_duration);
     add_html_d(temp.data);
-
   }
+  add_html_d("</div>\n");
 
-  add_html_d(
-    "<h2 style='text-align:center; color:#2196F3;'>Enter Brightness (0-100)</h2>\n");
+  add_html_d("<div class='section-box'>\n");
+  add_html_d("<h2>Enter Brightness (0-100)</h2>\n");
 
-  for (int i = 1; i <= 8; i++)
+  for (uint32_t i = 1; i <= 8; i++)
   {
-    string256_t temp = {};
-    string256(
+    uint32_t bits = i - 1;
+    uint32_t b0 = (bits >> 2) & 1;
+    uint32_t b1 = (bits >> 1) & 1;
+    uint32_t b2 = bits & 1;
+
+    const char* c2 = b2 ? "filled" : "empty";
+    const char* c1 = b1 ? "filled" : "empty";
+    const char* c0 = b0 ? "filled" : "empty";
+
+    string512_t temp = {};
+    string512(
       &temp,
-      "<div class='input-item'><label for='num%d'>Scene %d:</label>"
-      "<input type='number' id='num%d' name='num%d' min='0' max='100' value='%u'></div>\n",
-      i, i, i, i, g_config.scenes[i - 1]);
+      "<div class='input-item'>"
+      "<label for='num%lu'>Scene %lu:</label>"
+      "<input type='number' id='num%lu' name='num%lu' min='0' max='100' value='%u'>"
+      "<div class='bit-display'>"
+      "<span class='circle %s'></span>"
+      "<span class='circle %s'></span>"
+      "<span class='circle %s'></span>"
+      "</div>"
+      "</div>\n",
+      i, i, i, i, g_config.scenes[i - 1], c2, c1, c0);
     add_html_d(temp.data);
   }
 
-  add_html_d("<button id='submit-btn' onclick='submitValues()'>Submit</button>\n");
+  add_html_d(
+    "<div class='bit-explanation'>"
+    "<h3>Input Explanation</h3>"
+    "<div class='bit-display'>"
+    "<span class='circle filled'></span><span class='bit-label'>Input 1</span>"
+    "<span class='circle filled'></span><span class='bit-label'>Input 2</span>"
+    "<span class='circle filled'></span><span class='bit-label'>Input 3</span>"
+    "</div>"
+    "</div>\n");
+
+  add_html_d("</div>\n");
+
+  add_html_d("<button id='submit-btn' onclick='submitValues()'>Save</button>\n");
   add_html_d("</div>\n");
 
   add_html_d("<script>\n");
