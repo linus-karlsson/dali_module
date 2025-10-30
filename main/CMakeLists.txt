@@ -48,7 +48,7 @@ set(SOURCES ${COMMON_SOURCES} ${MODULE_SOURCES})
 
 idf_component_register(SRCS ${SOURCES}
                        PRIV_REQUIRES app_update nvs_flash driver esp_timer mbedtls esp_wifi esp_http_server
-                       INCLUDE_DIRS "." "../components/cJSON")
+                       INCLUDE_DIRS ".")
 
                    #idf_component_register(SRCS ${SOURCES}
                    #    PRIV_REQUIRES app_update nvs_flash driver esp_timer mbedtls esp_wifi esp_http_server

@@ -26,7 +26,7 @@ static httpd_handle_t server = NULL;
 static esp_netif_t* netif_ap = NULL;
 static lsx_timer_handle_t shut_down_timer = NULL;
 
-static uint8_t g_scenes[8] = {};
+static dali_config_t g_config = {};
 
 void add_html_(const char* html, char* buffer, size_t buffer_size,
                size_t* buffer_pointer_out)
@@ -300,7 +300,7 @@ char* send_html_inputs(size_t* html_pointer_out)
   (*html_pointer_out) = 0;
 
   size_t html_pointer = 0;
-  size_t html_size = 6 * 1024;
+  size_t html_size = 7 * 1024;
   char* html_buffer = (char*)calloc(html_size, sizeof(char));
 
   if (html_buffer == NULL)
@@ -346,6 +346,28 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d("</div></div>\n");
 
   add_html_d("<div id='input-list'>\n");
+
+  add_html_d("<div class='input-item'><label for='blinkEnable'>Enable Turn Off Blink:</label>");
+  if (g_config.blink_enabled)
+  {
+    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable' checked></div>\n");
+  }
+  else
+  {
+    add_html_d("<input type='checkbox' id='blinkEnable' name='blinkEnable'></div>\n");
+  }
+  add_html_d("<div class='input-item'><label for='blinkTimer'>Blink timer (s):</label>");
+
+  {
+    string256_t temp = {};
+    string256(
+      &temp,
+      "<input type='number' id='blinkTimer' name='blinkTimer' min='0' max='1200' value='%lu'></div>\n",
+      g_config.blink_duration);
+    add_html_d(temp.data);
+
+  }
+
   add_html_d(
     "<h2 style='text-align:center; color:#2196F3;'>Enter Brightness (0-100)</h2>\n");
 
@@ -356,7 +378,7 @@ char* send_html_inputs(size_t* html_pointer_out)
       &temp,
       "<div class='input-item'><label for='num%d'>Scene %d:</label>"
       "<input type='number' id='num%d' name='num%d' min='0' max='100' value='%u'></div>\n",
-      i, i, i, i, g_scenes[i - 1]);
+      i, i, i, i, g_config.scenes[i - 1]);
     add_html_d(temp.data);
   }
 
@@ -378,7 +400,15 @@ char* send_html_inputs(size_t* html_pointer_out)
     "    if(val<0||val>100){alert('Values must be between 0 and 100');return;}\n");
   add_html_d("    values.push(val);\n");
   add_html_d("  }\n");
+  add_html_d("  // Get blink settings\n");
+  add_html_d(
+    "  let blinkEnable = document.getElementById('blinkEnable').checked ? 1 : 0;\n");
+  add_html_d("  let blinkTimer = document.getElementById('blinkTimer').value;\n");
+  add_html_d(
+    "  if(blinkTimer < 0){ alert('Blink timer must be positive'); return; }\n");
   add_html_d("  let query = values.map((v,i)=>'v'+(i+1)+'='+v).join('&');\n");
+  add_html_d(
+    "  query += '&blinkEnable=' + blinkEnable + '&blinkTimer=' + blinkTimer;\n");
   add_html_d("  let xhr = new XMLHttpRequest();\n");
   add_html_d("  xhr.open('GET','/setValues?'+query,true);\n");
   add_html_d("  xhr.send();\n");
@@ -448,17 +478,25 @@ esp_err_t handle_set_values(httpd_req_t* req)
         values[i - 1] = (uint8_t)atoi(param);
       }
     }
-
-    if (dali_set_scenes(values))
+    int32_t blink_enable = 0;
+    int32_t blink_timer = 0;
+    if (httpd_query_key_value(query, "blinkEnable", param, sizeof(param)) == ESP_OK)
     {
-      printf("Received values: ");
-      for (int i = 0; i < 8; i++)
-      {
-        printf("%d ", values[i]);
-        g_scenes[i] = values[i];
-      }
-      printf("\n");
+      blink_enable = atoi(param);
+    }
 
+    if (httpd_query_key_value(query, "blinkTimer", param, sizeof(param)) == ESP_OK)
+    {
+      blink_timer = atoi(param);
+    }
+
+    dali_config_t temp_config = {};
+    temp_config.blink_enabled = (uint8_t)blink_enable;
+    temp_config.blink_duration = (uint32_t)blink_timer;
+    memcpy(temp_config.scenes, values, sizeof(temp_config.scenes));
+    if (dali_set_config(temp_config))
+    {
+      g_config = temp_config;
       response = "Scene set successfully";
     }
   }
@@ -569,9 +607,9 @@ void web_shutdown_callback(void* arguments)
   printf("Wi-Fi shut down complete.\n");
 }
 
-void web_initialize(char* uid, uint8_t* scenes)
+void web_initialize(char* uid, dali_config_t config)
 {
-  memcpy(g_scenes, scenes, sizeof(g_scenes));
+  g_config = config;
 
   set_home_page();
 

@@ -7,7 +7,6 @@
 #include <time.h>
 
 #include "platform.h"
-#include "json_util.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -281,6 +280,13 @@ extern "C"
     };
   } big_endian_t;
 
+typedef struct dali_config_t
+{
+  uint8_t blink_enabled;
+  uint32_t blink_duration;
+  uint8_t scenes[8];
+} dali_config_t;
+
   typedef enum result_code_t
   {
     RESULT_SUCCESS = 0,
@@ -460,11 +466,6 @@ extern "C"
                              void* json_object);
 
   void get_message_type_as_hex(char* message_type_as_hex, uint16_t message_type);
-
-  void json_send_empty_to_queue(void* queue, uint16_t message_type,
-                                uint32_t timeout_ms);
-  void json_send_to_queue_and_delete(cJSON* json, void* queue, uint32_t timeout_ms);
-  void json_send_to_queue(cJSON* json, void* queue, uint32_t timeout_ms);
 
   void selection_sort_float(float* array, uint32_t count);
   float median_float_buffer(float* buffer, uint32_t count);

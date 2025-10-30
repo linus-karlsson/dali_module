@@ -32,29 +32,30 @@ void getUid64()
     byte_to_hex(mac, 8, my_uid, false);
   }
 }
-
 void setup()
 {
   getUid64();
   lsx_nvs_initialize();
 
-  lsx_nvs_open(&nvs, "SCENES");
-  uint8_t scenes[8] = {};
+  lsx_nvs_open(&nvs, "DALI_CONFIG");
+  dali_config_t config = {};
   uint32_t value_size = 0;
-  lsx_nvs_get_bytes(&nvs, "Scenes", scenes, &value_size, sizeof(scenes));
+  lsx_nvs_get_uint8(&nvs, "BEnable", &config.blink_enabled, 0);
+  lsx_nvs_get_uint32(&nvs, "BDuration", &config.blink_duration, 0);
+  lsx_nvs_get_bytes(&nvs, "Scenes", config.scenes, &value_size, sizeof(config.scenes));
 
   printf("Dali scenes: ");
   for (int i = 0; i < 8; i++)
   {
-    printf("%d ", scenes[i]);
+    printf("%d ", config.scenes[i]);
   }
   printf("\n");
 
-  dali_initialize(scenes, &nvs);
+  dali_initialize(&nvs, config);
 
   vTaskDelay(pdMS_TO_TICKS(6000));
 
-  web_initialize(my_uid, scenes);
+  web_initialize(my_uid, config);
 }
 
 void app_main(void)

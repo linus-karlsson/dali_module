@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include "util.h"
+
 
 /**
  * Initiate and start Wifi task.
@@ -13,7 +15,7 @@ extern "C" {
  * @param outQueue Queue for messages from task.
  * @param uid 64-bit Uid. Identifies switch on networks.
  */
-void web_initialize(char *uid, uint8_t* scenes);
+void web_initialize(char *uid, dali_config_t config);
 
 #ifdef __cplusplus
 }

@@ -1142,85 +1142,11 @@ bool astrour_apply_with_shift(bool overlapped_relay, uint32_t time,
   return applied;
 }
 
-void check_queue_for_dublicates(char temp_message_buffer[QUEUE_SIZE2][MESSAGE_LENGTH2],
-                                uint16_t message_type, void* outgoing_queue_in,
-                                void* json_object)
-{
-  cJSON* json = (cJSON*)json_object;
-  if ((json == NULL) || (json->child == NULL) || (json->child->string == NULL) ||
-      (strlen(json->child->string) != 4))
-  {
-    return;
-  }
-
-  QueueHandle_t outgoing_queue = (QueueHandle_t)outgoing_queue_in;
-
-  uint32_t message_count = 0;
-  while (message_count < QUEUE_SIZE2)
-  {
-    memset(temp_message_buffer[message_count], 0, MESSAGE_LENGTH2);
-
-    if (xQueueReceive(outgoing_queue, temp_message_buffer[message_count],
-                      pdMS_TO_TICKS(10)) != pdPASS)
-    {
-      break;
-    }
-    message_count++;
-  }
-
-  bool copy_found = false;
-  for (uint32_t i = 0; i < message_count; ++i)
-  {
-    cJSON* temp = cJSON_ParseWithLength(temp_message_buffer[i], MESSAGE_LENGTH2);
-    if (temp != NULL)
-    {
-      if ((temp->child != NULL) && (temp->child->string != NULL))
-      {
-        if (strcmp(temp->child->string, json->child->string) == 0)
-        {
-          memset(temp_message_buffer[i], 0, MESSAGE_LENGTH2);
-          cJSON_PrintPreallocated(json, temp_message_buffer[i], MESSAGE_LENGTH2 - 1,
-                                  false);
-          copy_found = true;
-        }
-        xQueueSend(outgoing_queue, temp_message_buffer[i], pdMS_TO_TICKS(500));
-      }
-      cJSON_Delete(temp);
-    }
-  }
-  if (!copy_found)
-  {
-    memset(temp_message_buffer[0], 0, MESSAGE_LENGTH2);
-    cJSON_PrintPreallocated(json, temp_message_buffer[0], MESSAGE_LENGTH2 - 1, false);
-    xQueueSend(outgoing_queue, temp_message_buffer[0], pdMS_TO_TICKS(500));
-  }
-}
-
 void get_message_type_as_hex(char* message_type_as_hex, uint16_t message_type)
 {
   uint8_t buffer[2] = {};
   copy_uint16_to_byte_buffer_big_endian(message_type, buffer, 0);
   byte_to_hex(buffer, sizeof(buffer), message_type_as_hex, false);
-}
-
-void json_send_to_queue(cJSON* json, void* queue, uint32_t timeout_ms)
-{
-  string256_t temp = {};
-  cJSON_PrintPreallocated(json, temp.data, sizeof(temp.data) - 1, false);
-  xQueueSend((QueueHandle_t)queue, temp.data, pdMS_TO_TICKS(timeout_ms));
-}
-
-void json_send_to_queue_and_delete(cJSON* json, void* queue, uint32_t timeout_ms)
-{
-  json_send_to_queue(json, queue, timeout_ms);
-  cJSON_Delete(json);
-}
-
-void json_send_empty_to_queue(void* queue, uint16_t message_type, uint32_t timeout_ms)
-{
-  cJSON* json = cJSON_CreateObject();
-  json_add_object_message_type(json, message_type);
-  json_send_to_queue_and_delete(json, queue, timeout_ms);
 }
 
 void selection_sort_float(float* array, uint32_t count)
