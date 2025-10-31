@@ -13,9 +13,6 @@
 static string32_t yuno = {};
 static string32_t detail = {};
 
-static int LED1status = 1;
-static uint8_t currentBrightness = 1;
-
 static httpd_uri_t root_uri = {};
 static httpd_uri_t update_uri = {};
 static httpd_uri_t update_page_uri = {};
@@ -97,235 +94,142 @@ void set_home_page(void)
   add_home_html("</body></html>\n");
 }
 
-char* send_html(size_t* html_pointer_out)
+static size_t update_page_buffer_pointer = 0;
+static char update_page_html_buffer[8 * 1024] = {};
+
+void add_update_html(const char* html)
 {
-  (*html_pointer_out) = 0;
+  add_html_(html, update_page_html_buffer, sizeof(update_page_html_buffer),
+            &update_page_buffer_pointer);
+}
 
-  size_t html_pointer = 0;
-  size_t html_size = 10 * 1024;
-  char* html_buffer = (char*)calloc(html_size, sizeof(char));
-  if (html_buffer == NULL)
-  {
-    return html_buffer;
-  }
-
-  add_html_d("<!DOCTYPE html> <html>\n");
-  add_html_d(
+void set_update_page(void)
+{
+  add_update_html("<!DOCTYPE html> <html>\n");
+  add_update_html(
     "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">\n");
-  add_html_d("<title>Update</title>\n");
-  add_html_d("<style>\n");
+  add_update_html("<title>Update</title>\n");
+  add_update_html("<style>\n");
 
-  add_html_d(
+  add_update_html(
     ".background-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); "
     "width: 95%; max-width: 500px; background: rgba(30, 30, 30, 0.95); "
     "border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.7); "
     "padding: 30px; display: flex; flex-direction: column; align-items: center; "
     "backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); }\n");
 
-  add_html_d(
+  add_update_html(
     "body { display: flex; flex-direction: column; justify-content: center; align-items: center; "
     "height: 100vh; margin: 0; background-color: #121212; color: #E0E0E0; "
     "font-family: Arial, sans-serif; }\n");
 
-  add_html_d(
+  add_update_html(
     "#upload-form { width: 90%; max-width: 400px; background: #1E1E1E; padding: 20px; "
     "border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.6); display: flex; "
     "flex-direction: column; gap: 15px; align-items: center; }\n");
 
-  add_html_d(
+  add_update_html(
     "input[type='file'] { width: 100%; font-size: 16px; padding: 10px; border: 1px solid #555; "
     "border-radius: 6px; background: #2A2A2A; color: #E0E0E0; }\n");
-  add_html_d(
+  add_update_html(
     "input[type='file']::file-selector-button { background: #2196F3; color: white; border: none; "
     "padding: 8px 12px; border-radius: 5px; cursor: pointer; }\n");
-  add_html_d(
+  add_update_html(
     "input[type='file']::file-selector-button:hover { background: #1976D2; }\n");
 
-  add_html_d(
+  add_update_html(
     "input[type='submit'] { background: #2196F3; color: white; border: none; padding: 12px 20px; "
     "border-radius: 6px; cursor: pointer; font-size: 18px; width: 100%; transition: background 0.2s ease; }\n");
-  add_html_d("input[type='submit']:hover { background: #1976D2; }\n");
+  add_update_html("input[type='submit']:hover { background: #1976D2; }\n");
 
-  add_html_d(
+  add_update_html(
     "#prg-container { width: 90%; max-width: 400px; background-color: #2A2A2A; border-radius: 8px; "
     "overflow: hidden; margin-top: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }\n");
-  add_html_d(
+  add_update_html(
     "#prg { width: 0%; background-color: #2196F3; padding: 10px; color: white; text-align: center; "
     "font-size: 16px; transition: width 0.3s ease-in-out; }\n");
 
-  add_html_d(".dropdown { width: 90%; max-width: 400px; margin-bottom: 10px; }\n");
-  add_html_d(
-    ".dropdown button { width: 100%; padding: 10px; font-size: 18px; border: none; background-color: #2196F3; "
-    "color: white; border-radius: 6px; cursor: pointer; transition: background 0.2s ease; }\n");
-  add_html_d(".dropdown button:hover { background-color: #1976D2; }\n");
-  add_html_d(
-    ".dropdown-content { display: none; flex-direction: column; gap: 5px; padding: 10px; background: #1E1E1E; "
-    "border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.6); }\n");
-  add_html_d(
-    ".dropdown-content a { text-align: center; padding: 10px; font-size: 16px; text-decoration: none; "
-    "color: white; background: #2196F3; border-radius: 5px; transition: background 0.2s ease; }\n");
-  add_html_d(".dropdown-content a:hover { background: #1976D2; }\n");
-
-  add_html_d(
-    "#brightness-slider { width: 90%; max-width: 500px; height: 20px; appearance: none; "
-    "background: #2A2A2A; border-radius: 10px; outline: none; transition: background 0.3s; }\n");
-  add_html_d(
-    "#brightness-slider::-webkit-slider-thumb { appearance: none; width: 30px; height: 30px; "
-    "background: #2196F3; border-radius: 50%; cursor: pointer; }\n");
-  add_html_d(
-    "#brightness-slider::-moz-range-thumb { width: 30px; height: 30px; background: #2196F3; "
-    "border-radius: 50%; cursor: pointer; }\n");
-
-  add_html_d(
+  add_update_html(
     "#file-input { width: 90%; max-width: 400px; font-size: 16px; padding: 12px; "
     "border: 1px solid #555; border-radius: 6px; margin-top: 10px; background: #2A2A2A; color: #E0E0E0; }\n");
 
-  add_html_d(
+  add_update_html(
     "#update-button { width: 90%; max-width: 400px; background-color: #2196F3; color: white; "
     "border: none; padding: 12px 20px; border-radius: 6px; font-size: 18px; cursor: pointer; "
     "margin-top: 10px; transition: background 0.2s ease; }\n");
-  add_html_d("#update-button:hover { background-color: #1976D2; }\n");
+  add_update_html("#update-button:hover { background-color: #1976D2; }\n");
 
-  add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
-  add_html_d(
+  add_update_html(
+    ".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
+  add_update_html(
     ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; "
     "border-radius: 5px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }\n");
-  add_html_d(
+  add_update_html(
     ".menu-content { display: none; flex-direction: column; background: #1E1E1E; border-radius: 10px; "
     "box-shadow: 0 4px 8px rgba(0,0,0,0.6); margin-top: 10px; }\n");
-  add_html_d(
+  add_update_html(
     ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; background: #2196F3; "
     "border-radius: 5px; margin: 5px; text-align: center; transition: background 0.2s ease; }\n");
-  add_html_d(".menu-content a:hover { background: #1976D2; }\n");
+  add_update_html(".menu-content a:hover { background: #1976D2; }\n");
 
-  add_html_d("</style>\n");
+  add_update_html("</style>\n");
 
-  add_html_d("</head>\n");
-  add_html_d("<body>\n");
+  add_update_html("</head>\n");
+  add_update_html("<body>\n");
 
-  add_html_d("<div id='sidebar' class='sidebar'>\n");
-  add_html_d("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
-  add_html_d("<div id='menu-content' class='menu-content'>\n");
-  add_html_d("<a href='/'>Home</a>\n");
-  add_html_d("<a href='/setPage'>Set Page</a>\n");
-  add_html_d("</div></div>\n");
+  add_update_html("<div id='sidebar' class='sidebar'>\n");
+  add_update_html(
+    "<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
+  add_update_html("<div id='menu-content' class='menu-content'>\n");
+  add_update_html("<a href='/'>Home</a>\n");
+  add_update_html("<a href='/setPage'>Set Page</a>\n");
+  add_update_html("</div></div>\n");
 
- add_html_d("<div class='background-card'>\n");
+  add_update_html("<div class='background-card'>\n");
 
-
-  add_html_d("<div class='dropdown'>\n");
-  add_html_d("<button onclick=\"toggleDropdown()\">Controls</button>\n");
-  add_html_d("<div class='dropdown-content' id='dropdown-content'>\n");
-
-  string256_t temp = {};
-
-  string256(&temp,
-            "<button id='relay1-btn' onclick=\"relay1()\">Relay 1 %s</button>\n",
-            (LED1status == 2 ? "OFF" : "ON"));
-
-  add_html_d(temp.data);
-
-  string256_reset(&temp);
-  string256(
-    &temp,
-    "<label for='brightness'>Brightness: <span id='brightness-value'>%u</span></label>\n",
-    currentBrightness);
-
-  add_html_d(temp.data);
-
-  string256_reset(&temp);
-  string256(
-    &temp,
-    "<input type='range' id='brightness-slider' min='1' max='100' value='%u' oninput='showBrightness(this.value)' onchange='updateBrightness(this.value)'>\n",
-    currentBrightness);
-
-  add_html_d(temp.data);
-
-  add_html_d("<button id='relay-reset' onclick=\"reset()\">Reset</button>\n");
-  add_html_d("</div>\n");
-  add_html_d("</div>\n");
-
-  add_html_d("<input type='file' id='file-input'>\n");
-  add_html_d(
+  add_update_html("<input type='file' id='file-input'>\n");
+  add_update_html(
     "<button id='update-button' onclick='uploadFirmware()'>Uppdatera</button>\n");
 
-  add_html_d("<div id='prg-container'>\n");
-  add_html_d("<div id='prg'>0%</div>\n");
-  add_html_d("</div>\n");
+  add_update_html("<div id='prg-container'>\n");
+  add_update_html("<div id='prg'>0%</div>\n");
+  add_update_html("</div>\n");
 
- add_html_d("</div>\n"); 
+  add_update_html("</div>\n");
 
-  add_html_d("<script>\n");
+  add_update_html("<script>\n");
 
-  add_html_d("function toggleMenu(){\n");
-  add_html_d(" var menu=document.getElementById('menu-content');\n");
-  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
-  add_html_d("}\n");
+  add_update_html("function toggleMenu(){\n");
+  add_update_html(" var menu=document.getElementById('menu-content');\n");
+  add_update_html(
+    " menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
+  add_update_html("}\n");
 
-  add_html_d("function toggleMenu(){\n");
-  add_html_d(" var menu=document.getElementById('menu-content');\n");
-  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
-  add_html_d("}\n");
-
-  add_html_d("function toggleDropdown() {\n");
-  add_html_d("var content = document.getElementById('dropdown-content');\n");
-  add_html_d(
-    "content.style.display = content.style.display === 'flex' ? 'none' : 'flex';\n");
-  add_html_d("}\n");
-  add_html_d("function updateBrightness(value) {\n");
-  add_html_d("  document.getElementById('brightness-value').innerText = value;\n");
-  add_html_d("  var xhr = new XMLHttpRequest();\n");
-  add_html_d("  xhr.open('GET', '/setBrightness?value=' + value, true);\n");
-  add_html_d("  xhr.send();\n");
-  add_html_d("}\n");
-  add_html_d("function showBrightness(value) {\n");
-  add_html_d("  document.getElementById('brightness-value').innerText = value;\n");
-  add_html_d("}\n");
-  add_html_d("function relay1() {\n");
-  add_html_d("  var btn = document.getElementById('relay1-btn');\n");
-  add_html_d(
-    "  var label = btn.innerText === 'Relay 1 ON' ? 'Relay 1 OFF' : 'Relay 1 ON';\n");
-  add_html_d("  btn.innerText = label;\n");
-  add_html_d("  var xhr = new XMLHttpRequest();\n");
-  add_html_d("  var value = label === 'Relay 1 ON' ? 1 : 2\n;");
-  add_html_d("  xhr.open('GET', '/relay1?value=' + value, true);\n");
-  add_html_d("  xhr.send();\n");
-  add_html_d("}\n");
-  add_html_d("function reset() {\n");
-  add_html_d("  var btn = document.getElementById('relay1-btn');\n");
-  add_html_d("  btn.innerText = 'Relay 1 OFF';\n");
-  add_html_d("  var xhr = new XMLHttpRequest();\n");
-  add_html_d("  xhr.open('GET', '/reset', true);\n");
-  add_html_d("  xhr.send();\n");
-  add_html_d("}\n");
-  add_html_d("var prg = document.getElementById('prg');\n");
-  add_html_d("function uploadFirmware() {\n");
-  add_html_d("  var fileInput = document.getElementById('file-input');\n");
-  add_html_d("  if (!fileInput.files.length) return;\n");
-  add_html_d("  var file = fileInput.files[0];\n");
-  add_html_d("  var reader = new FileReader();\n");
-  add_html_d("  reader.onload = function(e) {\n");
-  add_html_d("    var req = new XMLHttpRequest();\n");
-  add_html_d("    req.open('POST', '/update');\n");
-  add_html_d(
+  add_update_html("var prg = document.getElementById('prg');\n");
+  add_update_html("function uploadFirmware() {\n");
+  add_update_html("  var fileInput = document.getElementById('file-input');\n");
+  add_update_html("  if (!fileInput.files.length) return;\n");
+  add_update_html("  var file = fileInput.files[0];\n");
+  add_update_html("  var reader = new FileReader();\n");
+  add_update_html("  reader.onload = function(e) {\n");
+  add_update_html("    var req = new XMLHttpRequest();\n");
+  add_update_html("    req.open('POST', '/update');\n");
+  add_update_html(
     "    req.setRequestHeader('Content-Type', 'application/octet-stream');\n");
-  add_html_d("    req.upload.addEventListener('progress', function(p) {\n");
-  add_html_d("      if(p.lengthComputable){\n");
-  add_html_d("        let w = Math.round((p.loaded / p.total)*100) + '%';\n");
-  add_html_d("        prg.innerHTML = w;\n");
-  add_html_d("        prg.style.width = w;\n");
-  add_html_d("        if(w == '100%') prg.style.backgroundColor = '#04AA6D';\n");
-  add_html_d("      }\n");
-  add_html_d("    });\n");
-  add_html_d("    req.send(e.target.result);\n");
-  add_html_d("  };\n");
-  add_html_d("  reader.readAsArrayBuffer(file);\n");
-  add_html_d("}\n");
-  add_html_d("</script>\n");
-  add_html_d("</body></html>\n");
-
-  (*html_pointer_out) = html_pointer;
-  return html_buffer;
+  add_update_html("    req.upload.addEventListener('progress', function(p) {\n");
+  add_update_html("      if(p.lengthComputable){\n");
+  add_update_html("        let w = Math.round((p.loaded / p.total)*100) + '%';\n");
+  add_update_html("        prg.innerHTML = w;\n");
+  add_update_html("        prg.style.width = w;\n");
+  add_update_html("        if(w == '100%') prg.style.backgroundColor = '#04AA6D';\n");
+  add_update_html("      }\n");
+  add_update_html("    });\n");
+  add_update_html("    req.send(e.target.result);\n");
+  add_update_html("  };\n");
+  add_update_html("  reader.readAsArrayBuffer(file);\n");
+  add_update_html("}\n");
+  add_update_html("</script>\n");
+  add_update_html("</body></html>\n");
 }
 
 char* send_html_inputs(size_t* html_pointer_out)
@@ -347,18 +251,15 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d("<title>Scene Config</title>\n");
   add_html_d("<style>\n");
 
-  /* Base page layout */
   add_html_d(
     "body { display: flex; flex-direction: column; justify-content: center; align-items: center; "
     "height: 100vh; margin: 0; background-color: #121212; color: #E0E0E0; "
     "font-family: Arial, sans-serif; }\n");
 
-  /* Main container */
   add_html_d(
     "#input-list { width: 90%; max-width: 450px; background: #1E1E1E; padding: 20px; "
     "border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 20px; }\n");
 
-  /* Section cards */
   add_html_d(
     ".section-box { background: #2A2A2A; padding: 20px; border-radius: 15px; "
     "box-shadow: 0 4px 10px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box; }\n");
@@ -366,7 +267,6 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d(
     ".section-box h2 { text-align: center; color: #64B5F6; margin-top: 0; }\n");
 
-  /* Input items */
   add_html_d(
     ".input-item { display: flex; justify-content: space-between; align-items: center; }\n");
   add_html_d(".input-item label { font-size: 16px; color: #E0E0E0; }\n");
@@ -375,13 +275,11 @@ char* send_html_inputs(size_t* html_pointer_out)
     "border-radius: 5px; text-align: center; font-size: 16px; background: #1E1E1E; color: #E0E0E0; }\n");
   add_html_d(".input-item input:focus { outline: none; border-color: #64B5F6; }\n");
 
-  /* Submit button */
   add_html_d(
     "#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; "
     "border-radius: 5px; cursor: pointer; font-size: 18px; margin-top: 15px; transition: background 0.2s ease; }\n");
   add_html_d("#submit-btn:hover { background: #1976D2; }\n");
 
-  /* Sidebar + menu */
   add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
   add_html_d(
     ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; "
@@ -394,14 +292,12 @@ char* send_html_inputs(size_t* html_pointer_out)
     "background: #2196F3; border-radius: 5px; margin: 5px; text-align: center; transition: background 0.2s ease; }\n");
   add_html_d(".menu-content a:hover { background: #1976D2; }\n");
 
-  /* Bit display circles */
   add_html_d(
     ".bit-display { display: flex; gap: 6px; margin-left: 6px; }\n"
     ".circle { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #999; display: inline-block; }\n"
     ".circle.filled { background-color: #64B5F6; border-color: #64B5F6; }\n"
     ".circle.empty { background-color: transparent; border-color: #555; }\n");
 
-  /* Bit explanation text */
   add_html_d(".bit-explanation h3 { color: #64B5F6; margin-bottom: 8px; }\n");
 
   add_html_d("</style>\n");
@@ -418,6 +314,18 @@ char* send_html_inputs(size_t* html_pointer_out)
 
   add_html_d("<div class='section-box'>\n");
   add_html_d("<h2>Turn Off Blink</h2>\n");
+
+  add_html_d("<div class='input-item'>");
+
+  add_html_d("<label for='fadeTime'>Fade Time (s):</label>");
+  {
+    string256_t temp = {};
+    string256(
+      &temp,
+      "<input type='number' id='fadeTime' name='fadeTime' min='0' max='8' value='%lu'></div>\n",
+      g_config.fade_time);
+    add_html_d(temp.data);
+  }
 
   add_html_d("<div class='input-item'><label for='blinkEnable'>Enable:</label>");
   if (g_config.blink_enabled)
@@ -439,6 +347,8 @@ char* send_html_inputs(size_t* html_pointer_out)
       g_config.blink_duration);
     add_html_d(temp.data);
   }
+
+
   add_html_d("</div>\n");
 
   add_html_d("<div class='section-box'>\n");
@@ -505,11 +415,12 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d(
     "  let blinkEnable = document.getElementById('blinkEnable').checked ? 1 : 0;\n");
   add_html_d("  let blinkTimer = document.getElementById('blinkTimer').value;\n");
+  add_html_d("  let fadeTime = document.getElementById('fadeTime').value;\n");
   add_html_d(
     "  if(blinkTimer < 0){ alert('Blink timer must be positive'); return; }\n");
   add_html_d("  let query = values.map((v,i)=>'v'+(i+1)+'='+v).join('&');\n");
   add_html_d(
-    "  query += '&blinkEnable=' + blinkEnable + '&blinkTimer=' + blinkTimer;\n");
+    "  query += '&blinkEnable=' + blinkEnable + '&blinkTimer=' + blinkTimer + '&fadeTime=' + fadeTime;\n");
   add_html_d("  let xhr = new XMLHttpRequest();\n");
   add_html_d("  xhr.open('GET','/setValues?'+query,true);\n");
   add_html_d("  xhr.send();\n");
@@ -531,13 +442,7 @@ esp_err_t root_get_handler(httpd_req_t* request)
 
 esp_err_t update_page_handler(httpd_req_t* request)
 {
-  size_t html_pointer = 0;
-  char* html = send_html(&html_pointer);
-  if (html)
-  {
-    httpd_resp_send(request, html, html_pointer);
-    free(html);
-  }
+  httpd_resp_send(request, update_page_html_buffer, update_page_buffer_pointer);
   return ESP_OK;
 }
 
@@ -580,19 +485,26 @@ esp_err_t handle_set_values(httpd_req_t* req)
       }
     }
     int32_t blink_enable = 0;
-    int32_t blink_timer = 0;
     if (httpd_query_key_value(query, "blinkEnable", param, sizeof(param)) == ESP_OK)
     {
       blink_enable = atoi(param);
     }
 
+    int32_t blink_timer = 0;
     if (httpd_query_key_value(query, "blinkTimer", param, sizeof(param)) == ESP_OK)
     {
       blink_timer = atoi(param);
     }
 
+    int32_t fade_time = 0;
+    if (httpd_query_key_value(query, "fadeTime", param, sizeof(param)) == ESP_OK)
+    {
+      fade_time = atoi(param);
+    }
+
     dali_config_t temp_config = {};
     temp_config.blink_enabled = (uint8_t)blink_enable;
+    temp_config.fade_time = (uint8_t)fade_time;
     temp_config.blink_duration = (uint32_t)blink_timer;
     memcpy(temp_config.scenes, values, sizeof(temp_config.scenes));
     if (dali_set_config(temp_config))
@@ -713,6 +625,7 @@ void web_initialize(char* uid, dali_config_t config)
   g_config = config;
 
   set_home_page();
+  set_update_page();
 
   uint32_t uid_len = strlen(uid);
   uint32_t iterations = min(uid_len, 16);

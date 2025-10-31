@@ -283,6 +283,7 @@ extern "C"
 typedef struct dali_config_t
 {
   uint8_t blink_enabled;
+  uint8_t fade_time;
   uint32_t blink_duration;
   uint8_t scenes[8];
 } dali_config_t;

@@ -41,6 +41,7 @@ void setup()
   dali_config_t config = {};
   uint32_t value_size = 0;
   lsx_nvs_get_uint8(&nvs, "BEnable", &config.blink_enabled, 0);
+  lsx_nvs_get_uint8(&nvs, "FTime", &config.fade_time, 4);
   lsx_nvs_get_uint32(&nvs, "BDuration", &config.blink_duration, 0);
   lsx_nvs_get_bytes(&nvs, "Scenes", config.scenes, &value_size, sizeof(config.scenes));
 
