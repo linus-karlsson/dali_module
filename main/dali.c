@@ -44,6 +44,8 @@ typedef struct dali_t
   uint8_t rx_pin;
   uint32_t on_the_same_level_count;
 
+  uint32_t on_0;
+
   uint8_t fade_rate;
   uint8_t fade_time;
   uint8_t dimming_curve;
@@ -80,6 +82,8 @@ static StaticTask_t dali_stack_type = {};
 static dali_t dali = {};
 
 static const int delay_time = 15;
+
+static const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
 
 void dali_initialize_(void);
 void dali_turn_on_light_(void);
@@ -136,7 +140,6 @@ void pin_change(void* arguments)
 {
   uint32_t now_time = lsx_get_micro();
   uint32_t difference = now_time - interupt_timemark;
-#if 1
   if (difference >= (dali.delay + 100))
   {
     interupt_timemark = now_time;
@@ -153,21 +156,6 @@ void pin_change(void* arguments)
       interupt_timemark -= 200;
     }
   }
-#else
-  // NOTE(Linus): Branchless version of the code above. In case of timing problems
-
-  bool skip = (difference < (dali.delay + 100));
-  bool ok = (difference < ((dali.delay + dali.delay) + 200));
-
-  pin_change_count *= (ok && (pin_change_count < sizeof(pin_change_buffer)));
-
-  pin_change_buffer[pin_change_count] = esp_gpio_read(dali.rx_pin);
-
-  pin_change_count += (ok && (!skip));
-
-  interupt_timemark += (difference * (!skip));
-  interupt_timemark -= (200 * (!ok));
-#endif
 }
 
 uint8_t light_control_get_fade_time(void)
@@ -230,6 +218,8 @@ static inline void dali_broadcast_twice(uint8_t command)
 uint8_t dali_query_(uint8_t address, uint8_t command, uint8_t is_extended,
                     bool* error)
 {
+  lsx_delay_millis(delay_time);
+
   if (is_extended)
   {
     dali_transmit(0xC1, 6);
@@ -265,7 +255,7 @@ uint8_t dali_query0(uint8_t address, uint8_t command, uint8_t is_extended,
   vTaskDelay(pdMS_TO_TICKS(40));
 
   uint32_t total_number_queries = 6;
-  uint32_t count = 1;
+  uint32_t count = 0;
   uint8_t responses[6] = {};
 
   if (error) *error = true;
@@ -273,50 +263,33 @@ uint8_t dali_query0(uint8_t address, uint8_t command, uint8_t is_extended,
   for (uint32_t i = 0; i < total_number_queries; ++i)
   {
     bool error_temp = false;
-    responses[i] = dali_query1(address, command, is_extended, &error_temp);
-    if (error_temp)
+    uint8_t temp_response = dali_query1(address, command, is_extended, &error_temp);
+    if (!error_temp)
     {
-      led_set(LED_DALI, 0, 127, 0);
-      vTaskDelay(pdMS_TO_TICKS(40));
-
-      return 0;
+      responses[count++] = temp_response;
     }
-#if 1
-    if ((i > 0) && (responses[i - 1] == responses[i]) && ((++count) >= 4))
-    {
-      if (error) *error = false;
-      lsx_log("Query: %u\n", responses[i]);
-
-      led_set(LED_DALI, 0, 127, 0);
-      vTaskDelay(pdMS_TO_TICKS(40));
-
-      return responses[i];
-    }
-    else
-    {
-      count = 1;
-    }
-#endif
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(16));
   }
-
-  uint32_t correct_count = 0;
-  uint8_t current_response = 0;
-  for (uint32_t i = 0; i < total_number_queries; ++i)
+  if (count >= 4)
   {
-    correct_count = 0;
-    current_response = responses[i];
-    for (uint32_t j = 0; j < total_number_queries; ++j)
+    uint32_t correct_count = 0;
+    uint8_t current_response = 0;
+    for (uint32_t i = 0; i < count; ++i)
     {
-      if ((current_response == responses[j]) && ((++correct_count) >= 4))
+      correct_count = 0;
+      current_response = responses[i];
+      for (uint32_t j = 0; j < count; ++j)
       {
-        if (error) *error = false;
-        lsx_log("Query: %u\n", current_response);
+        if ((current_response == responses[j]) && ((++correct_count) >= 4))
+        {
+          if (error) *error = false;
+          lsx_log("Query: %u\n", current_response);
 
-        led_set(LED_DALI, 0, 127, 0);
-        vTaskDelay(pdMS_TO_TICKS(40));
+          led_set(LED_DALI, 0, 127, 0);
+          vTaskDelay(pdMS_TO_TICKS(40));
 
-        return current_response;
+          return current_response;
+        }
       }
     }
   }
@@ -433,11 +406,28 @@ void dali_send_brightness(uint8_t brightness)
     lsx_log("Sending brightness: %u\n", brightness);
     if ((level <= min_brightness) && (brightness == 0))
     {
-      lsx_log("off\n");
-      dali_turn_off_light_();
+      if (error)
+      {
+        if ((++dali.on_0) >= 6)
+        {
+          lsx_log("off\n");
+          dali_turn_off_light_();
+        }
+        else
+        {
+          dali_set_brightness_(brightness);
+        }
+      }
+      else
+      {
+        lsx_log("off\n");
+        dali_turn_off_light_();
+      }
     }
     else
     {
+      dali.on_0 = 0;
+
       dali_set_brightness_(brightness);
     }
   }
@@ -457,30 +447,20 @@ void dali_set_command(uint8_t value, uint8_t command, bool extended)
   check_if_stored_command(command);
 }
 
-static uint8_t filter_total_count = 6;
+static uint32_t filter_total_count = 100;
 
-static bool check_input(uint8_t pin, bool* filter_value_out,
-                        uint8_t* filter_count_out)
+static void check_input(uint8_t pin, uint8_t* filter_values,
+                        uint32_t* filter_indices_out, uint32_t* filter_count_out)
 {
-  uint8_t filer_count = *filter_count_out;
-  if (filer_count < filter_total_count)
-  {
-#if 0
-    bool filter_value = lsx_gpio_read(pin) == LSX_GPIO_HIGH;
-#else
-    bool filter_value = (dali.config.scenes[7] >> pin) & 0x01;
-#endif
-    if (filer_count == 0)
-    {
-      (*filter_value_out) = filter_value;
-    }
-    else if (filter_value != (*filter_value_out))
-    {
-      return false;
-    }
-    (*filter_count_out) = filer_count + 1;
-  }
-  return true;
+  uint32_t filter_indices = *filter_indices_out;
+  uint32_t filter_count = *filter_count_out;
+
+  filter_values[filter_indices] = lsx_gpio_read(pin) == LSX_GPIO_LOW;
+  filter_count = min(filter_count + 1, filter_total_count);
+  filter_indices = plus_one_wrap(filter_indices, filter_total_count);
+
+  (*filter_indices_out) = filter_indices;
+  (*filter_count_out) = filter_count;
 }
 
 void dali_send_bit(uint8_t bit)
@@ -543,6 +523,7 @@ uint8_t dali_receive_(bool* error, uint32_t delay)
   {
     response |= (!(pin_change_buffer[i])) << (8 - i);
   }
+
   return response;
 }
 
@@ -675,19 +656,23 @@ void dali_initialize_(void)
 {
   lsx_log("Dali init\n");
 
-  dali.tx_pin = 6;
-  dali.rx_pin = 5;
+  dali.tx_pin = 5;
+  dali.rx_pin = 6;
   dali.delay = 833 / 2;
   dali.on_the_same_level_count = 0;
   dali.current_brightness = 0;
 
   lsx_gpio_config(dali.tx_pin, LSX_GPIO_MODE_OUTPUT, LSX_GPIO_INTR_DISABLE, false,
                   false);
-  lsx_gpio_write(dali.tx_pin, LSX_GPIO_LOW);
 
-  lsx_gpio_config(dali.rx_pin, LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_ANYEDGE, false,
+  lsx_gpio_config(dali.rx_pin, LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_ANYEDGE, true,
                   false);
-  lsx_gpio_write(dali.rx_pin, LSX_GPIO_LOW);
+
+  for (uint32_t i = 0; i < array_size(dali_input_pins); ++i)
+  {
+    lsx_gpio_config(dali_input_pins[i], LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_DISABLE,
+                    true, false);
+  }
 
   lsx_gpio_install_interrupt_service();
   lsx_gpio_add_pin_interrput(dali.rx_pin, pin_change, NULL);
@@ -783,16 +768,25 @@ void dali_task(void* pvParameters)
   bool has_read_inputs = false;
   timer_ms_t turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
   timer_ms_t send_brightness_timer = timer_create_ms(10000);
-  timer_ms_t check_input_timer = timer_create_ms(500);
+  timer_ms_t check_input_timer = timer_create_ms(40);
+  const uint32_t random_delay_max = 10;
+  uint32_t random_delay = random_delay_max;
 
-  const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+  uint32_t filter_count[3] = {};
+  uint32_t filter_indices[3] = {};
+  uint8_t filter_values[3][filter_total_count] = {};
+
   bool filter_value[3] = {};
-  uint8_t filter_count[3] = {};
 
   uint8_t last_sent_brightness = 0;
 
+  uint8_t main_light_tick = 24;
+  uint32_t last_time = lsx_get_millis();
+  float delta_time = 0.0f;
+
   while (true)
   {
+    uint32_t start = lsx_get_millis();
     esp_task_wdt_reset();
 
     if (dali.set_config)
@@ -819,23 +813,17 @@ void dali_task(void* pvParameters)
       lsx_log("\n");
     }
 
-    if (timer_is_up_and_reset_ms(&check_input_timer, lsx_get_millis()))
+    if (timer_is_up_ms(check_input_timer, lsx_get_millis()))
     {
+      random_delay = rand() % random_delay_max;
+      check_input_timer.duration =
+        50 + ((random_delay) * (random_delay <= random_delay_max));
+      check_input_timer.time = lsx_get_millis();
+
       for (uint32_t i = 0; i < array_size(filter_count); ++i)
       {
-#if 0
-      if (!check_input(dali_input_pins[i], filter_value + i, filter_count + i))
-      {
-        memset(filter_count, 0, sizeof(filter_count));
-        break;
-      }
-#else
-        if (!check_input(i, filter_value + i, filter_count + i))
-        {
-          memset(filter_count, 0, sizeof(filter_count));
-          break;
-        }
-#endif
+        check_input(dali_input_pins[i], filter_values[i], filter_indices + i,
+                    filter_count + i);
       }
     }
 
@@ -843,8 +831,41 @@ void dali_task(void* pvParameters)
         (filter_count[1] >= filter_total_count) &&
         (filter_count[2] >= filter_total_count))
     {
+      uint32_t on_count[3] = { 0, 0, 0 };
+      for (uint32_t i = 0; i < array_size(filter_value); ++i)
+      {
+        lsx_log("ARRAY: ");
+        for (uint32_t j = 0; j < filter_total_count; ++j)
+        {
+          on_count[i] += (filter_values[i][j] == 1);
+
+          lsx_log("%u ", filter_values[i][j]);
+        }
+        lsx_log("\n");
+      }
+      for (uint32_t i = 0; i < array_size(filter_value); ++i)
+      {
+        uint32_t threshold =
+          (uint32_t)((float)filter_total_count * (filter_value[i] ? 0.5f : 0.8f));
+        filter_value[i] = 1;
+        if (on_count[i] < threshold)
+        {
+          filter_value[i] = 0;
+        }
+        printf("COOUNT: %lu\n", on_count[i]);
+        printf("threshold: %lu\n", threshold);
+      }
       has_read_inputs = true;
       memset(filter_count, 0, sizeof(filter_count));
+      memset(filter_indices, 0, sizeof(filter_indices));
+      memset(filter_values, 0, sizeof(filter_values));
+
+      uint8_t lamp_pins[] = { LED_I1, LED_I2, LED_I3 };
+      for (uint32_t i = 0; i < array_size(lamp_pins); ++i)
+      {
+        uint8_t value = 127 * filter_value[i];
+        led_set(lamp_pins[i], value, value, value);
+      }
 
       uint8_t brightness = dali.config.scenes[get_input_index(filter_value)];
       if (brightness != last_sent_brightness)
@@ -879,7 +900,7 @@ void dali_task(void* pvParameters)
       uint32_t ms = lsx_get_millis();
       if (turn_off_blink)
       {
-        float scale = (dali.fade_time <= 6) ? 0.32f : 0.54f;
+        float scale = (dali.fade_time <= 6) ? 0.36f : 0.56f;
         if ((ms - turn_off_timer.time) >=
             (uint32_t)((float)(dali.fade_time) * 1000.0f * scale))
         {
@@ -900,7 +921,17 @@ void dali_task(void* pvParameters)
     {
       dali_send_brightness(dali.current_brightness);
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(32));
+
+    delta_time = (float)(start - last_time) / 1000.0f;
+    last_time = start;
+
+    main_light_tick += (48 * delta_time);
+    if (main_light_tick >= 127)
+    {
+      main_light_tick = 24;
+    }
+    led_set(LED_MAIN, 0, main_light_tick, 0);
   }
 }
 
