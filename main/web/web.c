@@ -13,17 +13,64 @@
 static string32_t yuno = {};
 static string32_t detail = {};
 
+static httpd_uri_t log_uri = {};
+static httpd_uri_t wifi_uri = {};
 static httpd_uri_t root_uri = {};
 static httpd_uri_t update_uri = {};
 static httpd_uri_t update_page_uri = {};
 static httpd_uri_t set_brightness_page_uri = {};
 static httpd_uri_t set_brightness_uri = {};
+static httpd_uri_t set_wifi_uri = {};
+
+static uint32_t g_log_pointer = 0;
+static char g_log_buffer[6 * 1024] = {};
 
 static httpd_handle_t server = NULL;
 static esp_netif_t* netif_ap = NULL;
 static lsx_timer_handle_t shut_down_timer = NULL;
 
 static dali_config_t g_config = {};
+
+static volatile bool g_wifi_on = true;
+
+static nvs_t g_nvs = {};
+
+void web_log(const char* format, ...)
+{
+  if (g_wifi_on)
+  {
+    uint32_t capacity = sizeof(g_log_buffer);
+
+    uint32_t capacity_left = capacity - g_log_pointer;
+    if (capacity_left < 256)
+    {
+      uint32_t i = 0;
+      for (uint32_t j = 1024; j < capacity; ++i, ++j)
+      {
+        g_log_buffer[i] = g_log_buffer[j];
+      }
+      g_log_pointer = i - capacity_left;
+      g_log_buffer[g_log_pointer] = '\0';
+    }
+    capacity_left = capacity - g_log_pointer;
+
+    va_list args;
+    va_start(args, format);
+
+    int32_t length =
+      vsnprintf(g_log_buffer + g_log_pointer, capacity_left, format, args) +
+      g_log_pointer;
+
+    g_log_pointer = length;
+    if (length > capacity - 1)
+    {
+      g_log_pointer = capacity - 1;
+    }
+    g_log_buffer[g_log_pointer] = '\0';
+
+    va_end(args);
+  }
+}
 
 void add_html_(const char* html, char* buffer, size_t buffer_size,
                size_t* buffer_pointer_out)
@@ -36,10 +83,6 @@ void add_html_(const char* html, char* buffer, size_t buffer_size,
     memcpy(buffer + buffer_pointer, html, html_len);
     buffer_pointer += html_len;
     buffer[buffer_pointer] = '\0';
-  }
-  else
-  {
-    lsx_log("ERROR, add html\n");
   }
   (*buffer_pointer_out) = buffer_pointer;
 }
@@ -86,6 +129,8 @@ void set_home_page(void)
     "<button onclick=\"window.location.href='/setPage'\">Set Scenes</button>\n");
   add_home_html(
     "<button onclick=\"window.location.href='/updatePage'\">Update Firmware</button>\n");
+  add_home_html(
+    "<button onclick=\"window.location.href='/wifiPage'\">Wifi Config</button>\n");
   add_home_html("</div>\n");
 
   add_home_html("<script>\n");
@@ -115,7 +160,7 @@ void set_update_page(void)
     ".background-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); "
     "width: 95%; max-width: 500px; background: rgba(30, 30, 30, 0.95); "
     "border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.7); "
-    "padding: 30px; display: flex; flex-direction: column; align-items: center; "
+    "padding: 10px; display: flex; flex-direction: column; align-items: center; "
     "backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); }\n");
 
   add_update_html(
@@ -183,9 +228,13 @@ void set_update_page(void)
   add_update_html("<div id='menu-content' class='menu-content'>\n");
   add_update_html("<a href='/'>Home</a>\n");
   add_update_html("<a href='/setPage'>Set Page</a>\n");
+  add_update_html("<a href='/wifiPage'>Wifi Page</a>\n");
   add_update_html("</div></div>\n");
 
   add_update_html("<div class='background-card'>\n");
+
+  add_update_html(
+    "<div id='log-container' style='width:90%;max-width:400px;height:300px;overflow-y:auto;background:#1E1E1E;color:white;font-family:Arial;font-size:16px;border-radius:8px;padding:10px;margin-top:15px;box-shadow:0 2px 6px rgba(0,0,0,0.5);'></div>\n");
 
   add_update_html("<input type='file' id='file-input'>\n");
   add_update_html(
@@ -198,6 +247,26 @@ void set_update_page(void)
   add_update_html("</div>\n");
 
   add_update_html("<script>\n");
+
+  add_update_html("var autoScroll = true;\n");
+  add_update_html("var log = document.getElementById('log-container');\n");
+
+  add_update_html("log.addEventListener('scroll', function(){\n");
+  add_update_html(
+    "  autoScroll = (log.scrollHeight - log.scrollTop - log.clientHeight) < 10;\n");
+  add_update_html("});\n");
+
+  add_update_html("function logMessage(msg){\n");
+  add_update_html("  msg = msg.replace(/\\n/g, '<br>');\n");
+  add_update_html("  log.innerHTML = msg+'<br>';\n");
+  add_update_html("  if(autoScroll){ log.scrollTop = log.scrollHeight; }\n");
+  add_update_html("}\n");
+
+  add_update_html("setInterval(function(){\n");
+  add_update_html("  fetch('/log').then(r => r.text()).then(t => {\n");
+  add_update_html("    if(t.trim().length) logMessage(t);\n");
+  add_update_html("  });\n");
+  add_update_html("}, 1000);\n");
 
   add_update_html("function toggleMenu(){\n");
   add_update_html(" var menu=document.getElementById('menu-content');\n");
@@ -308,6 +377,7 @@ char* send_html_inputs(size_t* html_pointer_out)
   add_html_d("<div id='menu-content' class='menu-content'>\n");
   add_html_d("<a href='/'>Home</a>\n");
   add_html_d("<a href='/updatePage'>Update Page</a>\n");
+  add_html_d("<a href='/wifiPage'>Wifi Page</a>\n");
   add_html_d("</div></div>\n");
 
   add_html_d("<div id='input-list'>\n");
@@ -347,7 +417,6 @@ char* send_html_inputs(size_t* html_pointer_out)
       g_config.blink_duration);
     add_html_d(temp.data);
   }
-
 
   add_html_d("</div>\n");
 
@@ -434,6 +503,121 @@ char* send_html_inputs(size_t* html_pointer_out)
   return html_buffer;
 }
 
+char* send_html_wifi(size_t* html_pointer_out)
+{
+  (*html_pointer_out) = 0;
+
+  size_t html_pointer = 0;
+  size_t html_size = 6 * 1024;
+  char* html_buffer = (char*)calloc(html_size, sizeof(char));
+
+  if (html_buffer == NULL)
+  {
+    return html_buffer;
+  }
+
+  add_html_d("<!DOCTYPE html><html>\n");
+  add_html_d(
+    "<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+  add_html_d("<title>WiFi Config</title>\n");
+  add_html_d("<style>\n");
+
+  add_html_d(".sidebar { position: fixed; top: 10px; left: 10px; z-index: 10; }\n");
+  add_html_d(
+    ".menu-btn { background-color: #2196F3; color: white; border: none; padding: 10px 15px; "
+    "border-radius: 5px; font-size: 20px; cursor: pointer; }\n");
+  add_html_d(
+    ".menu-content { display: none; flex-direction: column; background: #1E1E1E; border-radius: 10px; "
+    "box-shadow: 0 4px 8px rgba(0,0,0,0.4); margin-top: 10px; }\n");
+  add_html_d(
+    ".menu-content a { padding: 10px 20px; text-decoration: none; color: white; "
+    "background: #2196F3; border-radius: 5px; margin: 5px; text-align: center; transition: background 0.2s ease; }\n");
+  add_html_d(".menu-content a:hover { background: #1976D2; }\n");
+
+  add_html_d(
+    "body { display: flex; justify-content: center; align-items: center; height: 100vh; "
+    "margin: 0; background-color: #121212; color: #E0E0E0; font-family: Arial, sans-serif; }\n");
+
+  add_html_d(
+    "#wifi-form { width: 90%; max-width: 400px; background: #1E1E1E; padding: 20px; "
+    "border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 20px; }\n");
+
+  add_html_d(".input-item { display: flex; flex-direction: column; }\n");
+  add_html_d(".input-item label { font-size: 16px; margin-bottom: 8px; }\n");
+  add_html_d(
+    ".input-item input { padding: 10px; border: 1px solid #555; border-radius: 5px; "
+    "font-size: 16px; background: #2A2A2A; color: #E0E0E0; }\n");
+  add_html_d(".input-item input:focus { outline: none; border-color: #64B5F6; }\n");
+
+  add_html_d(
+    "#submit-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; "
+    "border-radius: 5px; cursor: pointer; font-size: 18px; transition: background 0.2s ease; }\n");
+  add_html_d("#submit-btn:hover { background: #1976D2; }\n");
+
+  add_html_d(
+    "#restart-btn { background: #2196F3; color: white; border: none; padding: 12px 20px; "
+    "border-radius: 5px; cursor: pointer; font-size: 18px; transition: background 0.2s ease; }\n");
+  add_html_d("#restart-btn:hover { background: #1976D2; }\n");
+
+  add_html_d("</style>\n</head>\n<body>\n");
+
+  add_html_d("<div id='sidebar' class='sidebar'>\n");
+  add_html_d("<button class='menu-btn' onclick='toggleMenu()'>&#9776;</button>\n");
+  add_html_d("<div id='menu-content' class='menu-content'>\n");
+  add_html_d("<a href='/'>Home</a>\n");
+  add_html_d("<a href='/setPage'>Set Page</a>\n");
+  add_html_d("<a href='/updatePage'>Update Page</a>\n");
+  add_html_d("</div></div>\n");
+
+  add_html_d("<div id='wifi-form'>\n");
+  add_html_d("<div class='input-item'>\n");
+  add_html_d("<label for='wifiName'>WiFi Name:</label>\n");
+  add_html_d(
+    "<input type='text' id='wifiName' name='wifiName' placeholder='Enter WiFi Name'>\n");
+  add_html_d("</div>\n");
+  add_html_d("<button id='submit-btn' onclick='submitWiFi()'>Save</button>\n");
+  add_html_d("<button id='restart-btn' onclick='restart()'>Restart</button>\n");
+  add_html_d("</div>\n");
+
+  add_html_d("<script>\n");
+
+  add_html_d("function toggleMenu(){\n");
+  add_html_d(" var menu=document.getElementById('menu-content');\n");
+  add_html_d(" menu.style.display=(menu.style.display==='flex')?'none':'flex';\n");
+  add_html_d("}\n");
+
+  add_html_d("function restart(){\n");
+  add_html_d("  const xhr = new XMLHttpRequest();\n");
+  add_html_d("  xhr.open('GET', '/setWiFi?restart=1', true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("  alert('Restart sent!');\n");
+  add_html_d("}\n");
+
+  add_html_d("function submitWiFi(){\n");
+  add_html_d("  const wifiName = document.getElementById('wifiName').value;\n");
+  add_html_d(
+    "  if(wifiName.trim() === '') { alert('WiFi name cannot be empty'); return; }\n");
+  add_html_d("  const xhr = new XMLHttpRequest();\n");
+  add_html_d(
+    "  xhr.open('GET', '/setWiFi?name=' + encodeURIComponent(wifiName), true);\n");
+  add_html_d("  xhr.send();\n");
+  add_html_d("  alert('WiFi name sent!');\n");
+  add_html_d("}\n");
+  add_html_d("</script>\n");
+
+  add_html_d("</body></html>\n");
+
+  (*html_pointer_out) = html_pointer;
+  return html_buffer;
+}
+
+esp_err_t log_handler(httpd_req_t* req)
+{
+  httpd_resp_set_type(req, "text/plain");
+  httpd_resp_sendstr(req, g_log_buffer);
+  return ESP_OK;
+}
+
 esp_err_t root_get_handler(httpd_req_t* request)
 {
   httpd_resp_send(request, home_page_html_buffer, home_page_buffer_pointer);
@@ -458,9 +642,21 @@ esp_err_t set_brigthness_post_handler(httpd_req_t* request)
   return ESP_OK;
 }
 
+esp_err_t wifi_config_post_handler(httpd_req_t* request)
+{
+  size_t html_pointer = 0;
+  char* html = send_html_wifi(&html_pointer);
+  if (html)
+  {
+    httpd_resp_send(request, html, html_pointer);
+    free(html);
+  }
+  return ESP_OK;
+}
+
 esp_err_t handle_set_values(httpd_req_t* req)
 {
-  char query[128];
+  char query[128] = {};
   size_t query_len = httpd_req_get_url_query_len(req) + 1;
 
   if (query_len > sizeof(query))
@@ -513,6 +709,39 @@ esp_err_t handle_set_values(httpd_req_t* req)
       response = "Scene set successfully";
     }
   }
+  httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+  return ESP_OK;
+}
+
+esp_err_t handle_set_wifi(httpd_req_t* req)
+{
+  char query[128] = {};
+  size_t query_len = httpd_req_get_url_query_len(req) + 1;
+
+  if (query_len > sizeof(query))
+  {
+    httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Query too long");
+    return ESP_FAIL;
+  }
+
+  const char* response = "Error setting WiFi name";
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
+  {
+    char wifi_name[32] = { 0 };
+    if (httpd_query_key_value(query, "name", wifi_name, sizeof(wifi_name) - 1) ==
+        ESP_OK)
+    {
+      response = "WiFi name set successfully";
+      printf("%s\n", wifi_name);
+      lsx_nvs_set_string(&g_nvs, "APname", wifi_name);
+    }
+    if (httpd_query_key_value(query, "restart", wifi_name, sizeof(wifi_name) - 1) ==
+        ESP_OK)
+    {
+      esp_restart();
+    }
+  }
+
   httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
   return ESP_OK;
 }
@@ -586,8 +815,23 @@ esp_err_t start_webserver(void)
   set_brightness_uri.method = HTTP_GET;
   set_brightness_uri.handler = handle_set_values;
 
+  set_wifi_uri.uri = "/setWiFi";
+  set_wifi_uri.method = HTTP_GET;
+  set_wifi_uri.handler = handle_set_wifi;
+
+  wifi_uri.uri = "/wifiPage";
+  wifi_uri.method = HTTP_GET;
+  wifi_uri.handler = wifi_config_post_handler;
+
+  log_uri.uri = "/log";
+  log_uri.method = HTTP_GET;
+  log_uri.handler = log_handler;
+
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   httpd_start(&server, &config);
+  httpd_register_uri_handler(server, &log_uri);
+  httpd_register_uri_handler(server, &wifi_uri);
+  httpd_register_uri_handler(server, &set_wifi_uri);
   httpd_register_uri_handler(server, &root_uri);
   httpd_register_uri_handler(server, &update_page_uri);
   httpd_register_uri_handler(server, &update_uri);
@@ -598,6 +842,8 @@ esp_err_t start_webserver(void)
 
 void web_shutdown_callback(void* arguments)
 {
+  g_wifi_on = false;
+
   printf("Shutting down Wi-Fi and network...\n");
 
   if (server)
@@ -622,6 +868,7 @@ void web_shutdown_callback(void* arguments)
 
 void web_initialize(char* uid, dali_config_t config)
 {
+  lsx_nvs_open(&g_nvs, "WIFI_NVS");
   g_config = config;
 
   set_home_page();
@@ -658,6 +905,18 @@ void web_initialize(char* uid, dali_config_t config)
   {
     esp_netif_dhcps_stop(netif_ap);
 
+    string32_t temp_name = {};
+    if (!lsx_nvs_get_string(&g_nvs, "APname", temp_name.data, &temp_name.length,
+                            sizeof(temp_name.data) - 1))
+    {
+      string32_copy(&temp_name, &detail);
+    }
+    else
+    {
+      string32_set_length(&temp_name);
+    }
+
+
     esp_netif_ip_info_t ip_info;
     ip_info.ip.addr = esp_ip4addr_aton("10.10.10.1");
     ip_info.netmask.addr = esp_ip4addr_aton("255.255.255.0");
@@ -670,8 +929,8 @@ void web_initialize(char* uid, dali_config_t config)
     esp_wifi_init(&init_config);
 
     wifi_config_t wifi_config = {};
-    memcpy(wifi_config.ap.ssid, detail.data, detail.length);
-    wifi_config.ap.ssid_len = detail.length;
+    memcpy(wifi_config.ap.ssid, temp_name.data, temp_name.length);
+    wifi_config.ap.ssid_len = temp_name.length;
     memcpy(wifi_config.ap.password, yuno.data, yuno.length);
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 1;
@@ -686,9 +945,12 @@ void web_initialize(char* uid, dali_config_t config)
     shut_down_timer = lsx_timer_create(web_shutdown_callback, NULL);
     uint64_t fifteen_min = 15ULL * 60ULL * 1000000ULL;
     lsx_timer_start(shut_down_timer, fifteen_min, false);
+
+    g_wifi_on = true;
   }
   else
   {
+    g_wifi_on = false;
     esp_netif_deinit();
     esp_event_loop_delete_default();
   }

@@ -8,6 +8,8 @@
 
 #include "platform.h"
 
+void web_log(const char* format, ...);
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -25,9 +27,14 @@ extern "C"
 #define IGNORE_VALUE 255
 
 #ifndef LSX_RELEASE
-#define lsx_log(...) printf(__VA_ARGS__)
+#define lsx_log(...)                                                                 \
+  do                                                                                 \
+  {                                                                                  \
+    web_log(__VA_ARGS__);                                                            \
+    printf(__VA_ARGS__);                                                             \
+  } while (0)
 #else
-#define lsx_log(...)
+#define lsx_log(...) web_log(__VA_ARGS__)
 #endif
 
 #define QUEUE_SIZE2     10
@@ -109,9 +116,9 @@ extern "C"
 #define RULE_TYPE_SCHEDULE       8
 #define RULE_TYPE_UNKNOWN        9
 
-#define RULE_IS_FLOAT_TYPE(value)                                                      \
-  (((value) == RULE_TYPE_ALTITUDE_OVER) || ((value) == RULE_TYPE_ALTITUDE_UNDER) ||    \
-   ((value) == RULE_TYPE_AZIMUTH_OVER) || ((value) == RULE_TYPE_AZIMUTH_UNDER) ||      \
+#define RULE_IS_FLOAT_TYPE(value)                                                    \
+  (((value) == RULE_TYPE_ALTITUDE_OVER) || ((value) == RULE_TYPE_ALTITUDE_UNDER) ||  \
+   ((value) == RULE_TYPE_AZIMUTH_OVER) || ((value) == RULE_TYPE_AZIMUTH_UNDER) ||    \
    ((value) == RULE_TYPE_LUX_OVER) || ((value) == RULE_TYPE_LUX_UNDER))
 
 #define in_between(start, value, end)      ((start) <= (value) && (value) <= (end))
@@ -189,23 +196,24 @@ extern "C"
 
 #define o_c(c, i, u) ((c) ^ (XOR_KEY + ((i + u) * 11)))
 
-#define setting_string2(string, u, e, ...)                                             \
-  do                                                                                   \
-  {                                                                                    \
-    uint32_t VVVDITHEHRHDJKL2447837[] = { __VA_ARGS__ };                               \
-    for (uint32_t VHDKHFJKHKL211114 = 0;                                               \
-         VHDKHFJKHKL211114 < array_size(VVVDITHEHRHDJKL2447837); ++VHDKHFJKHKL211114)  \
-    {                                                                                  \
-      uint32_t ERUTJD32887 = VHDKHFJKHKL211114 + (VHDKHFJKHKL211114 > (e));            \
-      VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114] =                                      \
-        ch_int(o_c(VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114], ERUTJD32887, u),         \
-               VHDKHFJKHKL211114, u);                                                  \
-    }                                                                                  \
-    uint32_t UDJDJU37329JJFDHSU = u;                                                   \
-    (string)->length = transform_buffer_to_string(                                     \
-      VVVDITHEHRHDJKL2447837, array_size(VVVDITHEHRHDJKL2447837), &UDJDJU37329JJFDHSU, \
-      (string)->data, sizeof((string)->data));                                         \
-                                                                                       \
+#define setting_string2(string, u, e, ...)                                           \
+  do                                                                                 \
+  {                                                                                  \
+    uint32_t VVVDITHEHRHDJKL2447837[] = { __VA_ARGS__ };                             \
+    for (uint32_t VHDKHFJKHKL211114 = 0;                                             \
+         VHDKHFJKHKL211114 < array_size(VVVDITHEHRHDJKL2447837);                     \
+         ++VHDKHFJKHKL211114)                                                        \
+    {                                                                                \
+      uint32_t ERUTJD32887 = VHDKHFJKHKL211114 + (VHDKHFJKHKL211114 > (e));          \
+      VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114] =                                    \
+        ch_int(o_c(VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114], ERUTJD32887, u),       \
+               VHDKHFJKHKL211114, u);                                                \
+    }                                                                                \
+    uint32_t UDJDJU37329JJFDHSU = u;                                                 \
+    (string)->length = transform_buffer_to_string(                                   \
+      VVVDITHEHRHDJKL2447837, array_size(VVVDITHEHRHDJKL2447837),                    \
+      &UDJDJU37329JJFDHSU, (string)->data, sizeof((string)->data));                  \
+                                                                                     \
   } while (0)
 
   typedef struct timer_ms_t
@@ -280,13 +288,13 @@ extern "C"
     };
   } big_endian_t;
 
-typedef struct dali_config_t
-{
-  uint8_t blink_enabled;
-  uint8_t fade_time;
-  uint32_t blink_duration;
-  uint8_t scenes[8];
-} dali_config_t;
+  typedef struct dali_config_t
+  {
+    uint8_t blink_enabled;
+    uint8_t fade_time;
+    uint32_t blink_duration;
+    uint8_t scenes[8];
+  } dali_config_t;
 
   typedef enum result_code_t
   {
@@ -299,41 +307,43 @@ typedef struct dali_config_t
     RESULT_ERROR_RULE_SIZE_WRONG,
   } result_code_t;
 
-#define STRING_TYPE_DEFINITIONS(size)                                                  \
-  typedef struct string##size##_t                                                      \
-  {                                                                                    \
-    uint32_t length;                                                                   \
-    char data[size];                                                                   \
-  } string##size##_t;                                                                  \
-  enum                                                                                 \
-  {                                                                                    \
-    STRING##size##_BUFFER_SIZE = size                                                  \
-  };                                                                                   \
-  bool string##size(string##size##_t* result, const char* format, ...);                \
-  void string##size##_copy(string##size##_t* result, const string##size##_t* string);  \
-  bool string##size##_can_fit(const string##size##_t* string, uint32_t length);        \
-  void string##size##_reset(string##size##_t* result);                                 \
-  void string##size##_set_length(string##size##_t* result);                            \
-  int32_t string##size##_find(const string##size##_t* string_to_scan,                  \
-                              const char* string_to_scan_for, int32_t start_index,     \
-                              int32_t length);                                         \
-  int32_t string##size##_find_char(const string##size##_t* string_to_scan,             \
-                                   char char_to_scan_for, int32_t start_index);        \
-  bool string##size##_equal(const string##size##_t* first,                             \
-                            const string##size##_t* second);                           \
-  bool string##size##_equal_string(const string##size##_t* first, const char* second); \
-  bool string##size##_begins_with(const string##size##_t* first, const char* begin);   \
-  uint32_t string##size##_as_uint32(const string##size##_t* string,                    \
-                                    int32_t start_index, int32_t end_index);           \
-  bool string##size##_is_empty(const string##size##_t* string);                        \
-  bool string##size##_is_null(const string##size##_t* string);                         \
-  uint32_t string##size##_substring_shared(string##size##_t* shared_string,            \
-                                           int32_t start_index, int32_t end_index,     \
+#define STRING_TYPE_DEFINITIONS(size)                                                \
+  typedef struct string##size##_t                                                    \
+  {                                                                                  \
+    uint32_t length;                                                                 \
+    char data[size];                                                                 \
+  } string##size##_t;                                                                \
+  enum                                                                               \
+  {                                                                                  \
+    STRING##size##_BUFFER_SIZE = size                                                \
+  };                                                                                 \
+  bool string##size(string##size##_t* result, const char* format, ...);              \
+  void string##size##_copy(string##size##_t* result,                                 \
+                           const string##size##_t* string);                          \
+  bool string##size##_can_fit(const string##size##_t* string, uint32_t length);      \
+  void string##size##_reset(string##size##_t* result);                               \
+  void string##size##_set_length(string##size##_t* result);                          \
+  int32_t string##size##_find(const string##size##_t* string_to_scan,                \
+                              const char* string_to_scan_for, int32_t start_index,   \
+                              int32_t length);                                       \
+  int32_t string##size##_find_char(const string##size##_t* string_to_scan,           \
+                                   char char_to_scan_for, int32_t start_index);      \
+  bool string##size##_equal(const string##size##_t* first,                           \
+                            const string##size##_t* second);                         \
+  bool string##size##_equal_string(const string##size##_t* first,                    \
+                                   const char* second);                              \
+  bool string##size##_begins_with(const string##size##_t* first, const char* begin); \
+  uint32_t string##size##_as_uint32(const string##size##_t* string,                  \
+                                    int32_t start_index, int32_t end_index);         \
+  bool string##size##_is_empty(const string##size##_t* string);                      \
+  bool string##size##_is_null(const string##size##_t* string);                       \
+  uint32_t string##size##_substring_shared(string##size##_t* shared_string,          \
+                                           int32_t start_index, int32_t end_index,   \
                                            char** result)
 
-#define STRING_FROM_STRING_DEFINITION(first_size, second_size)                         \
-  bool string##first_size##_from_string##second_size(                                  \
-    string##first_size##_t* destination, const string##second_size##_t* source,        \
+#define STRING_FROM_STRING_DEFINITION(first_size, second_size)                       \
+  bool string##first_size##_from_string##second_size(                                \
+    string##first_size##_t* destination, const string##second_size##_t* source,      \
     uint32_t length, uint32_t offset)
 
   STRING_TYPE_DEFINITIONS(32);
@@ -346,7 +356,8 @@ typedef struct dali_config_t
 
   STRING_FROM_STRING_DEFINITION(64, 2048);
 
-  uint32_t length_of_constant_string(const char* constant_string, uint32_t cap_length);
+  uint32_t length_of_constant_string(const char* constant_string,
+                                     uint32_t cap_length);
 
   timer_ms_t timer_create_ms(uint32_t duration);
   bool timer_is_up_ms(timer_ms_t timer, uint32_t ms);
@@ -390,8 +401,10 @@ typedef struct dali_config_t
   result_code_t message_buffer_add_size(message_buffer_t* buffer);
 
   result_code_t message_buffer_read_uint8(message_buffer_t* buffer, uint8_t* result);
-  result_code_t message_buffer_read_uint16(message_buffer_t* buffer, uint16_t* result);
-  result_code_t message_buffer_read_uint32(message_buffer_t* buffer, uint32_t* result);
+  result_code_t message_buffer_read_uint16(message_buffer_t* buffer,
+                                           uint16_t* result);
+  result_code_t message_buffer_read_uint32(message_buffer_t* buffer,
+                                           uint32_t* result);
   result_code_t message_buffer_read_type(message_buffer_t* buffer, uint16_t* result);
 
   result_code_t message_buffer_read_float(message_buffer_t* buffer, float* result);
@@ -408,8 +421,8 @@ typedef struct dali_config_t
   uint32_t transform_buffer_to_string(uint32_t* util, uint32_t util_size,
                                       uint32_t* uint, char* out, uint32_t out_size);
 
-#define time_buffer_create(buffer, capacity, mark)                                     \
-  static_assert(array_size((buffer)->data) >= capacity);                               \
+#define time_buffer_create(buffer, capacity, mark)                                   \
+  static_assert(array_size((buffer)->data) >= capacity);                             \
   *(buffer) = time_buffer_create_(capacity, mark)
 
   time_buffer_t time_buffer_create_(uint32_t capacity, time_t mark);
@@ -445,7 +458,8 @@ typedef struct dali_config_t
   int32_t char_in_string_internal(const char* string, uint32_t string_length,
                                   char char_to_scan_for, int32_t start_index);
 
-  int32_t string_in_string_internal(const char* string_to_scan, uint32_t length_of_scan,
+  int32_t string_in_string_internal(const char* string_to_scan,
+                                    uint32_t length_of_scan,
                                     const char* string_to_scan_for,
                                     uint32_t length_of_search_string,
                                     int32_t start_index);

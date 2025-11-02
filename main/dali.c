@@ -852,8 +852,8 @@ void dali_task(void* pvParameters)
         {
           filter_value[i] = 0;
         }
-        printf("COOUNT: %lu\n", on_count[i]);
-        printf("threshold: %lu\n", threshold);
+        lsx_log("COOUNT: %lu\n", on_count[i]);
+        lsx_log("threshold: %lu\n", threshold);
       }
       has_read_inputs = true;
       memset(filter_count, 0, sizeof(filter_count));
