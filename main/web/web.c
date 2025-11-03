@@ -4,14 +4,19 @@
 #include <esp_http_server.h>
 #include <esp_ota_ops.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "web.h"
 #include "util.h"
 #include "platform.h"
 #include "dali.h"
+#include "version.h"
 
 static string32_t yuno = {};
 static string32_t detail = {};
+
+static string32_t g_name = {};
+static string32_t g_adp = {};
 
 static httpd_uri_t log_uri = {};
 static httpd_uri_t wifi_uri = {};
@@ -124,7 +129,9 @@ void set_home_page(void)
   add_home_html("</style></head><body>\n");
 
   add_home_html("<div id='main'>\n");
-  add_home_html("<h2 style='color:#2196F3;'>DALI</h2>\n");
+  add_home_html("<h2 style='color:#2196F3;'>DALI v");
+  add_home_html(VERSION);
+  add_home_html("</h2>\n");
   add_home_html(
     "<button onclick=\"window.location.href='/setPage'\">Set Scenes</button>\n");
   add_home_html(
@@ -571,9 +578,18 @@ char* send_html_wifi(size_t* html_pointer_out)
 
   add_html_d("<div id='wifi-form'>\n");
   add_html_d("<div class='input-item'>\n");
-  add_html_d("<label for='wifiName'>WiFi Name:</label>\n");
+  add_html_d("<label for='wname'>WiFi Name:</label>\n");
   add_html_d(
-    "<input type='text' id='wifiName' name='wifiName' placeholder='Enter WiFi Name'>\n");
+    "<input type='text' id='wname' name='wname' placeholder='Enter WiFi Name' value='");
+  add_html_d(g_name.data);
+  add_html_d("'>\n");
+  add_html_d("</div>\n");
+  add_html_d("<div class='input-item'>\n");
+  add_html_d("<label for='appd'>WiFi Password:</label>\n");
+  add_html_d(
+    "<input type='text' id='appd' name='appd' placeholder='Enter WiFi Password' value='");
+  add_html_d(g_adp.data);
+  add_html_d("'>\n");
   add_html_d("</div>\n");
   add_html_d("<button id='submit-btn' onclick='submitWiFi()'>Save</button>\n");
   add_html_d("<button id='restart-btn' onclick='restart()'>Restart</button>\n");
@@ -594,14 +610,13 @@ char* send_html_wifi(size_t* html_pointer_out)
   add_html_d("}\n");
 
   add_html_d("function submitWiFi(){\n");
-  add_html_d("  const wifiName = document.getElementById('wifiName').value;\n");
-  add_html_d(
-    "  if(wifiName.trim() === '') { alert('WiFi name cannot be empty'); return; }\n");
+  add_html_d("  const name = document.getElementById('wname').value;\n");
+  add_html_d("  const app = document.getElementById('appd').value;\n");
   add_html_d("  const xhr = new XMLHttpRequest();\n");
   add_html_d(
-    "  xhr.open('GET', '/setWiFi?name=' + encodeURIComponent(wifiName), true);\n");
+    "  xhr.open('GET', '/setWiFi?name=' + encodeURIComponent(name) + '&pass=' + encodeURIComponent(app), true);\n");
   add_html_d("  xhr.send();\n");
-  add_html_d("  alert('WiFi name sent!');\n");
+  add_html_d("  alert('WiFi config sent!');\n");
   add_html_d("}\n");
   add_html_d("</script>\n");
 
@@ -713,6 +728,40 @@ esp_err_t handle_set_values(httpd_req_t* req)
   return ESP_OK;
 }
 
+static void url_decode(char* dst, const char* src)
+{
+  char a, b;
+  while (*src)
+  {
+    if ((*src == '%') && ((a = src[1]) && (b = src[2])) &&
+        (isxdigit(a) && isxdigit(b)))
+    {
+      if (a >= 'a') a -= 'a' - 'A';
+      if (a >= 'A')
+        a -= ('A' - 10);
+      else
+        a -= '0';
+      if (b >= 'a') b -= 'a' - 'A';
+      if (b >= 'A')
+        b -= ('A' - 10);
+      else
+        b -= '0';
+      *dst++ = 16 * a + b;
+      src += 3;
+    }
+    else if (*src == '+')
+    {
+      *dst++ = ' '; // convert + to space
+      src++;
+    }
+    else
+    {
+      *dst++ = *src++;
+    }
+  }
+  *dst = '\0';
+}
+
 esp_err_t handle_set_wifi(httpd_req_t* req)
 {
   char query[128] = {};
@@ -724,16 +773,31 @@ esp_err_t handle_set_wifi(httpd_req_t* req)
     return ESP_FAIL;
   }
 
-  const char* response = "Error setting WiFi name";
+  const char* response = "Success";
   if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK)
   {
     char wifi_name[32] = { 0 };
+    char decoded[32] = { 0 };
     if (httpd_query_key_value(query, "name", wifi_name, sizeof(wifi_name) - 1) ==
         ESP_OK)
     {
-      response = "WiFi name set successfully";
-      printf("%s\n", wifi_name);
-      lsx_nvs_set_string(&g_nvs, "APname", wifi_name);
+      url_decode(decoded, wifi_name);
+      if (strlen(decoded) > 0)
+      {
+        lsx_nvs_set_string(&g_nvs, "ADALN", decoded);
+      }
+    }
+
+    memset(wifi_name, 0, sizeof(wifi_name));
+    memset(decoded, 0, sizeof(decoded));
+    if (httpd_query_key_value(query, "pass", wifi_name, sizeof(wifi_name) - 1) ==
+        ESP_OK)
+    {
+      url_decode(decoded, wifi_name);
+      if (strlen(decoded) > 0)
+      {
+        lsx_nvs_set_string(&g_nvs, "ADALP", decoded);
+      }
     }
     if (httpd_query_key_value(query, "restart", wifi_name, sizeof(wifi_name) - 1) ==
         ESP_OK)
@@ -866,6 +930,14 @@ void web_shutdown_callback(void* arguments)
   printf("Wi-Fi shut down complete.\n");
 }
 
+void web_uninitialize(void)
+{
+  esp_wifi_stop();
+  esp_wifi_deinit();
+  esp_event_loop_delete_default();
+  esp_netif_deinit();
+}
+
 void web_initialize(char* uid, dali_config_t config)
 {
   lsx_nvs_open(&g_nvs, "WIFI_NVS");
@@ -905,17 +977,23 @@ void web_initialize(char* uid, dali_config_t config)
   {
     esp_netif_dhcps_stop(netif_ap);
 
-    string32_t temp_name = {};
-    if (!lsx_nvs_get_string(&g_nvs, "APname", temp_name.data, &temp_name.length,
-                            sizeof(temp_name.data) - 1))
+    memset(&g_name, 0, sizeof(g_name));
+    if (!lsx_nvs_get_string(&g_nvs, "ADALN", g_name.data, &g_name.length,
+                            sizeof(g_name.data) - 1))
     {
-      string32_copy(&temp_name, &detail);
+      string32_copy(&g_name, &detail);
     }
     else
     {
-      string32_set_length(&temp_name);
+      string32_set_length(&g_name);
     }
 
+    memset(&g_adp, 0, sizeof(g_adp));
+    if (lsx_nvs_get_string(&g_nvs, "ADALP", g_adp.data, &g_adp.length,
+                           sizeof(g_adp.data) - 1))
+    {
+      string32_set_length(&g_adp);
+    }
 
     esp_netif_ip_info_t ip_info;
     ip_info.ip.addr = esp_ip4addr_aton("10.10.10.1");
@@ -929,12 +1007,19 @@ void web_initialize(char* uid, dali_config_t config)
     esp_wifi_init(&init_config);
 
     wifi_config_t wifi_config = {};
-    memcpy(wifi_config.ap.ssid, temp_name.data, temp_name.length);
-    wifi_config.ap.ssid_len = temp_name.length;
-    memcpy(wifi_config.ap.password, yuno.data, yuno.length);
+    memcpy(wifi_config.ap.ssid, g_name.data, g_name.length);
+    wifi_config.ap.ssid_len = g_name.length;
+    memcpy(wifi_config.ap.password, g_adp.data, g_adp.length);
     wifi_config.ap.channel = 1;
     wifi_config.ap.max_connection = 1;
-    wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    if (g_adp.length > 0)
+    {
+      wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    }
+    else
+    {
+      wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+    }
 
     esp_wifi_set_mode(WIFI_MODE_AP);
     esp_wifi_set_config(WIFI_IF_AP, &wifi_config);

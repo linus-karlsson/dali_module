@@ -1,13 +1,13 @@
 #ifndef VERSION
-#if defined (LSX_ZHAGA_DALI)
-#define VERSION "0.4.1"
+#if defined (LSX_ZHAGA_DALI) && defined (LSX_S33)
+#define VERSION "0.2.0"
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 4
-#define VERSION_RELEASE 1
+#define VERSION_MINOR 2
+#define VERSION_RELEASE 0
 #else
-#define VERSION "0.3.2"
+#define VERSION "0.1.0"
 #define VERSION_MAJOR 0
-#define VERSION_MINOR 3
-#define VERSION_RELEASE 2
+#define VERSION_MINOR 1
+#define VERSION_RELEASE 0
 #endif
 #endif

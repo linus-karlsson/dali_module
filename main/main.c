@@ -45,6 +45,8 @@ void setup()
   lsx_nvs_get_uint32(&nvs, "BDuration", &config.blink_duration, 0);
   lsx_nvs_get_bytes(&nvs, "Scenes", config.scenes, &value_size, sizeof(config.scenes));
 
+  dali_led_initialize();
+
   printf("Dali scenes: ");
   for (int i = 0; i < 8; i++)
   {
@@ -52,9 +54,13 @@ void setup()
   }
   printf("\n");
 
+  vTaskDelay(pdMS_TO_TICKS(500));
+  web_uninitialize();
+  vTaskDelay(pdMS_TO_TICKS(2000));
+
   dali_initialize(&nvs, config);
 
-  vTaskDelay(pdMS_TO_TICKS(6000));
+  vTaskDelay(pdMS_TO_TICKS(1000));
 
   web_initialize(my_uid, config);
 }

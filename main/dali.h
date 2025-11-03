@@ -74,5 +74,6 @@ void dali_initialize(nvs_t* scenes_nvs, dali_config_t config);
 bool dali_set_config(dali_config_t config);
 void light_control_add_interrupt(void);
 void light_control_remove_interrupt(void);
+void dali_led_initialize(void);
 
 #endif

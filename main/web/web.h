@@ -17,6 +17,8 @@ extern "C" {
  */
 void web_initialize(char *uid, dali_config_t config);
 
+void web_uninitialize(void);
+
 #ifdef __cplusplus
 }
 #endif
