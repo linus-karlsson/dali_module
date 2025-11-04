@@ -584,6 +584,7 @@ char* send_html_wifi(size_t* html_pointer_out)
   add_html_d(g_name.data);
   add_html_d("'>\n");
   add_html_d("</div>\n");
+#if 0
   add_html_d("<div class='input-item'>\n");
   add_html_d("<label for='appd'>WiFi Password:</label>\n");
   add_html_d(
@@ -591,6 +592,7 @@ char* send_html_wifi(size_t* html_pointer_out)
   add_html_d(g_adp.data);
   add_html_d("'>\n");
   add_html_d("</div>\n");
+#endif
   add_html_d("<button id='submit-btn' onclick='submitWiFi()'>Save</button>\n");
   add_html_d("<button id='restart-btn' onclick='restart()'>Restart</button>\n");
   add_html_d("</div>\n");
@@ -751,7 +753,7 @@ static void url_decode(char* dst, const char* src)
     }
     else if (*src == '+')
     {
-      *dst++ = ' '; // convert + to space
+      *dst++ = ' ';
       src++;
     }
     else
@@ -988,12 +990,16 @@ void web_initialize(char* uid, dali_config_t config)
       string32_set_length(&g_name);
     }
 
+#if 0
     memset(&g_adp, 0, sizeof(g_adp));
     if (lsx_nvs_get_string(&g_nvs, "ADALP", g_adp.data, &g_adp.length,
                            sizeof(g_adp.data) - 1))
     {
       string32_set_length(&g_adp);
     }
+#endif
+
+    string32_copy(&g_adp, &yuno);
 
     esp_netif_ip_info_t ip_info;
     ip_info.ip.addr = esp_ip4addr_aton("10.10.10.1");

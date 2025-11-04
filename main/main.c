@@ -54,15 +54,19 @@ void setup()
   }
   printf("\n");
 
+#if 0
   vTaskDelay(pdMS_TO_TICKS(500));
   web_uninitialize();
   vTaskDelay(pdMS_TO_TICKS(2000));
+#endif
 
   dali_initialize(&nvs, config);
 
+#if 0
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   web_initialize(my_uid, config);
+#endif
 }
 
 void app_main(void)

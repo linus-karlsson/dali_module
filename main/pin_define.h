@@ -8,8 +8,8 @@
 
 #define LED_PIN  48
 
-#define DALI_TX 5
-#define DALI_RX 6
+#define DALI_TX 43
+#define DALI_RX 44
 
 #else
 #define DALI_PIN_0 3

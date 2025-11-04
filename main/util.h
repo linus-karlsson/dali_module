@@ -15,17 +15,6 @@ extern "C"
 {
 #endif
 
-#define NO_LUX_VALUE (-1.0f)
-
-#define ASTROUR_NOT_APPLIED 0
-#define ASTROUR_NO_SHIFT    1
-#define ASTROUR_HALF_SHIFT  2
-#define ASTROUR_FULL_SHIFT  3
-
-#define LED_ON_TIME 240000
-
-#define IGNORE_VALUE 255
-
 #ifndef LSX_RELEASE
 #define lsx_log(...)                                                                 \
   do                                                                                 \
@@ -36,90 +25,6 @@ extern "C"
 #else
 #define lsx_log(...) web_log(__VA_ARGS__)
 #endif
-
-#define QUEUE_SIZE2     10
-#define MESSAGE_LENGTH2 256
-
-#define MESSAGE_LENGTH 64
-#define QUEUE_SIZE     20
-#define NO_OF_RULES    64
-#define MAX_REP_TIME   1800
-// #define MAX_REP_TIME     60
-#define TIME_IN_THE_PAST 1758781424
-
-#define MESSAGE_TYPE_NULL                       0x0000
-#define MESSAGE_TYPE_STATUS_REPORT              0x0001
-#define MESSAGE_TYPE_RULE_REPORT                0x0002
-#define MESSAGE_TYPE_CCID_REPORT                0x0003
-#define MESSAGE_TYPE_IP_REPORT                  0x0004
-#define MESSAGE_TYPE_OPERATOR_REPORT            0x0005
-#define MESSAGE_TYPE_GPS_REPORT                 0x0006
-#define MESSAGE_TYPE_SEARCH_GPS_AGAIN           0x0007
-#define MESSAGE_TYPE_INSERT_POS                 0x0008
-#define MESSAGE_TYPE_RSSI_REPORT                0x0009
-#define MESSAGE_TYPE_INSERT_RULE                0x000a
-#define MESSAGE_TYPE_REMOVE_RULE                0x000b
-#define MESSAGE_TYPE_REMOVE_ALL_RULE            0x000c
-#define MESSAGE_TYPE_SWITCH                     0x000d
-#define MESSAGE_TYPE_BURNTIME_REPORT            0x000e
-#define MESSAGE_TYPE_TIMEZONE_REPORT            0x000f
-#define MESSAGE_TYPE_INSERT_TIMEZONE            0x0010
-#define MESSAGE_TYPE_LUX_REPORT                 0x0011
-#define MESSAGE_TYPE_INSERT_LUX                 0x0012
-#define MESSAGE_TYPE_SET_MASTER_SLAVE           0x0013
-#define MESSAGE_TYPE_REQUEST_MASTER_SLAVE       0x0015
-#define MESSAGE_TYPE_RESTART_ESP                0x0016
-#define MESSAGE_TYPE_CLEAR_AND_RESTART_ESP      0x0017
-#define MESSAGE_TYPE_UPDATE_FIRMWARE            0x0018
-#define MESSAGE_TYPE_SET_TIME                   0x0019
-#define MESSAGE_TYPE_SYNC_WITH_NTP_SERVER       0x001a
-#define MESSAGE_TYPE_NTP_SERVER_REPORT          0x001b
-#define MESSAGE_TYPE_SET_NTP_SERVER             0x001c
-#define MESSAGE_TYPE_RUN_RULES                  0x001d
-#define MESSAGE_TYPE_OPERATORS_REPORT           0x001e
-#define MESSAGE_TYPE_SEARCH_AND_SELECT_OPERATOR 0x001f
-#define MESSAGE_TYPE_SELECT_NEW_OPERATOR        0x0020
-#define MESSAGE_TYPE_SEND_AT_COMMAND            0x0021
-#define MESSAGE_TYPE_RESTART_BG95               0x0022
-#define MESSAGE_TYPE_VERSION_REPORT             0x0023
-#define MESSAGE_TYPE_LIGHT_SET_CONFIG           0x0024
-#define MESSAGE_TYPE_LIGHT_SEND_QUERY_COMMAND   0x0025
-#define MESSAGE_TYPE_LIGHT_CONFIG_REPORT        0x0026
-#define MESSAGE_TYPE_LIGHT_STATUS_REPORT        0x0027
-#define MESSAGE_TYPE_LIGHT_FULL_DIAGNOSTIC      0x0028
-#define MESSAGE_TYPE_DYNAMIC_LUX_ACTIVATION     0x0029
-#define MESSAGE_TYPE_SET_AUTO_NTP_SERVER_UPDATE 0x002a
-#define MESSAGE_TYPE_SET_KEEPALIVE              0x002b
-#define MESSAGE_TYPE_SET_ASTROUR_SHIFT          0x002c
-#define MESSAGE_TYPE_CONFIG_ALTITUDES           0x002d
-#define MESSAGE_TYPE_LUX_CONFIG                 0x002e
-#define MESSAGE_TYPE_MASTER_SEND_BOUNDS         0x002f
-#define MESSAGE_TYPE_STORE_BURN_TIMES           0x0030
-#define MESSAGE_TYPE_ADD_MULTI_GROUP            0x0031
-#define MESSAGE_TYPE_REMOVE_MULTI_GROUP         0x0032
-#define MESSAGE_TYPE_REPORT_MULTI_GROUP         0x0033
-#define MESSAGE_TYPE_HAN_REPORT                 0x0034
-#define MESSAGE_TYPE_SET_LIGHT_SENSOR           0x0035
-#define MESSAGE_TYPE_SET_TIMEOUT_LUX_VALUE      0x0036
-#define MESSAGE_TYPE_CLEAR_ESP                  0x0037
-#define MESSAGE_TYPE_SET_LUX_STRAT              0x0038
-#define MESSAGE_TYPE_UNKNOWN                    0x0039
-
-#define RULE_TYPE_NULL           0
-#define RULE_TYPE_ALTITUDE_OVER  1
-#define RULE_TYPE_ALTITUDE_UNDER 2
-#define RULE_TYPE_AZIMUTH_OVER   3
-#define RULE_TYPE_AZIMUTH_UNDER  4
-#define RULE_TYPE_LUX_OVER       5
-#define RULE_TYPE_LUX_UNDER      6
-#define RULE_TYPE_TIME           7
-#define RULE_TYPE_SCHEDULE       8
-#define RULE_TYPE_UNKNOWN        9
-
-#define RULE_IS_FLOAT_TYPE(value)                                                    \
-  (((value) == RULE_TYPE_ALTITUDE_OVER) || ((value) == RULE_TYPE_ALTITUDE_UNDER) ||  \
-   ((value) == RULE_TYPE_AZIMUTH_OVER) || ((value) == RULE_TYPE_AZIMUTH_UNDER) ||    \
-   ((value) == RULE_TYPE_LUX_OVER) || ((value) == RULE_TYPE_LUX_UNDER))
 
 #define in_between(start, value, end)      ((start) <= (value) && (value) <= (end))
 #define in_between_open(start, value, end) ((start) <= (value) && (value) < (end))
@@ -190,32 +95,6 @@ extern "C"
 #define BIT_2  0x2
 #define BIT_1  0x1
 
-#define XOR_KEY 0x25A34F00
-
-#define FFINT_FOR 0x1037DF22
-
-#define o_c(c, i, u) ((c) ^ (XOR_KEY + ((i + u) * 11)))
-
-#define setting_string2(string, u, e, ...)                                           \
-  do                                                                                 \
-  {                                                                                  \
-    uint32_t VVVDITHEHRHDJKL2447837[] = { __VA_ARGS__ };                             \
-    for (uint32_t VHDKHFJKHKL211114 = 0;                                             \
-         VHDKHFJKHKL211114 < array_size(VVVDITHEHRHDJKL2447837);                     \
-         ++VHDKHFJKHKL211114)                                                        \
-    {                                                                                \
-      uint32_t ERUTJD32887 = VHDKHFJKHKL211114 + (VHDKHFJKHKL211114 > (e));          \
-      VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114] =                                    \
-        ch_int(o_c(VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114], ERUTJD32887, u),       \
-               VHDKHFJKHKL211114, u);                                                \
-    }                                                                                \
-    uint32_t UDJDJU37329JJFDHSU = u;                                                 \
-    (string)->length = transform_buffer_to_string(                                   \
-      VVVDITHEHRHDJKL2447837, array_size(VVVDITHEHRHDJKL2447837),                    \
-      &UDJDJU37329JJFDHSU, (string)->data, sizeof((string)->data));                  \
-                                                                                     \
-  } while (0)
-
   typedef struct timer_ms_t
   {
     uint32_t time;
@@ -228,32 +107,6 @@ extern "C"
     uint32_t duration;
   } timer_us_t;
 
-  typedef struct message_buffer_t
-  {
-    uint32_t write_pointer;
-    uint32_t read_pointer;
-    uint8_t data[MESSAGE_LENGTH];
-  } message_buffer_t;
-
-  typedef struct time_buffer_t
-  {
-    uint32_t count;
-    uint32_t capacity;
-    time_t mark;
-    time_t data[32];
-  } time_buffer_t;
-
-  typedef struct time_buffer_2_t
-  {
-    uint32_t head;
-    uint32_t tail;
-
-    uint32_t count;
-    uint32_t capacity;
-
-    time_t mark;
-    time_t data[32];
-  } time_buffer_2_t;
 
   typedef enum tokeniser_action_t
   {
@@ -306,6 +159,32 @@ extern "C"
     RESULT_ERROR_RULE_PRIORITY_TOO_HIGH,
     RESULT_ERROR_RULE_SIZE_WRONG,
   } result_code_t;
+
+#define XOR_KEY 0x25A34F00
+
+#define FFINT_FOR 0x1037DF22
+
+#define o_c(c, i, u) ((c) ^ (XOR_KEY + ((i + u) * 11)))
+
+#define setting_string2(string, u, e, ...)                                           \
+  do                                                                                 \
+  {                                                                                  \
+    uint32_t VVVDITHEHRHDJKL2447837[] = { __VA_ARGS__ };                             \
+    for (uint32_t VHDKHFJKHKL211114 = 0;                                             \
+         VHDKHFJKHKL211114 < array_size(VVVDITHEHRHDJKL2447837);                     \
+         ++VHDKHFJKHKL211114)                                                        \
+    {                                                                                \
+      uint32_t ERUTJD32887 = VHDKHFJKHKL211114 + (VHDKHFJKHKL211114 > (e));          \
+      VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114] =                                    \
+        ch_int(o_c(VVVDITHEHRHDJKL2447837[VHDKHFJKHKL211114], ERUTJD32887, u),       \
+               VHDKHFJKHKL211114, u);                                                \
+    }                                                                                \
+    uint32_t UDJDJU37329JJFDHSU = u;                                                 \
+    (string)->length = transform_buffer_to_string(                                   \
+      VVVDITHEHRHDJKL2447837, array_size(VVVDITHEHRHDJKL2447837),                    \
+      &UDJDJU37329JJFDHSU, (string)->data, sizeof((string)->data));                  \
+                                                                                     \
+  } while (0)
 
 #define STRING_TYPE_DEFINITIONS(size)                                                \
   typedef struct string##size##_t                                                    \
@@ -397,22 +276,6 @@ extern "C"
   float haversine_distance_km(float lat_first, float lon_first, float lat_second,
                               float lon_second);
 
-  void message_buffer_reset(message_buffer_t* buffer);
-  result_code_t message_buffer_add_size(message_buffer_t* buffer);
-
-  result_code_t message_buffer_read_uint8(message_buffer_t* buffer, uint8_t* result);
-  result_code_t message_buffer_read_uint16(message_buffer_t* buffer,
-                                           uint16_t* result);
-  result_code_t message_buffer_read_uint32(message_buffer_t* buffer,
-                                           uint32_t* result);
-  result_code_t message_buffer_read_type(message_buffer_t* buffer, uint16_t* result);
-
-  result_code_t message_buffer_read_float(message_buffer_t* buffer, float* result);
-
-  result_code_t message_buffer_write_uint8(message_buffer_t* buffer, uint8_t value);
-  result_code_t message_buffer_write_uint16(message_buffer_t* buffer, uint16_t value);
-  result_code_t message_buffer_write_uint32(message_buffer_t* buffer, uint32_t value);
-  result_code_t message_buffer_write_float(message_buffer_t* buffer, float value);
 
   void uint8_from_util_buffer(uint8_t* util, uint32_t util_size, uint8_t* uint,
                               string64_t* util_out, const uint8_t* th);
@@ -424,9 +287,6 @@ extern "C"
 #define time_buffer_create(buffer, capacity, mark)                                   \
   static_assert(array_size((buffer)->data) >= capacity);                             \
   *(buffer) = time_buffer_create_(capacity, mark)
-
-  time_buffer_t time_buffer_create_(uint32_t capacity, time_t mark);
-  bool time_buffer_add_time(time_buffer_t* buffer, time_t time);
 
   bool parse_ntp_response(string2048_t* response, time_info_t* time_info);
 
@@ -475,11 +335,6 @@ extern "C"
                                 uint32_t* off_on_full_shift_timer,
                                 uint32_t* off_on_half_shift_timer,
                                 uint32_t* on_on_half_shift_timer);
-
-  void
-  check_queue_for_dublicates(char temp_message_buffer[QUEUE_SIZE2][MESSAGE_LENGTH2],
-                             uint16_t message_type, void* outgoing_queue_in,
-                             void* json_object);
 
   void get_message_type_as_hex(char* message_type_as_hex, uint16_t message_type);
 
