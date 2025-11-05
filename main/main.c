@@ -47,26 +47,20 @@ void setup()
 
   dali_led_initialize();
 
-  printf("Dali scenes: ");
+  lsx_log("Dali scenes: ");
   for (int i = 0; i < 8; i++)
   {
-    printf("%d ", config.scenes[i]);
+    lsx_log("%d ", config.scenes[i]);
   }
-  printf("\n");
+  lsx_log("\n");
 
-#if 0
   vTaskDelay(pdMS_TO_TICKS(500));
   web_uninitialize();
-  vTaskDelay(pdMS_TO_TICKS(2000));
-#endif
+  web_initialize(my_uid, config);
+  vTaskDelay(pdMS_TO_TICKS(500));
 
   dali_initialize(&nvs, config);
 
-#if 0
-  vTaskDelay(pdMS_TO_TICKS(1000));
-
-  web_initialize(my_uid, config);
-#endif
 }
 
 void app_main(void)

@@ -940,26 +940,41 @@ void web_uninitialize(void)
   esp_netif_deinit();
 }
 
-void web_initialize(char* uid, dali_config_t config)
+bool g_start_wifi = false;
+
+void start_wifi(void)
 {
+  g_start_wifi = true;
+}
+
+char g_uid[32] = {};
+
+void web_task(void* parameters)
+{
+  while (!g_start_wifi)
+  {
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+
+  lsx_log("Web start\n");
+
   lsx_nvs_open(&g_nvs, "WIFI_NVS");
-  g_config = config;
 
   set_home_page();
   set_update_page();
 
-  uint32_t uid_len = strlen(uid);
+  uint32_t uid_len = strlen(g_uid);
   uint32_t iterations = min(uid_len, 16);
   uint32_t extra = 0;
   for (uint32_t i = 0; i < iterations; ++i)
   {
-    extra += ch_int(uid[i], i, 0x34274A0E);
+    extra += ch_int(g_uid[i], i, 0x34274A0E);
   }
 
   setting_string2(&detail, extra, 5, o_c('L', 0, extra), o_c('S', 1, extra),
                   o_c('X', 2, extra), o_c('D', 3, extra), o_c('_', 4, extra));
 
-  memcpy(detail.data + detail.length, uid + 10, uid_len - 10);
+  memcpy(detail.data + detail.length, g_uid + 10, uid_len - 10);
   detail.length += uid_len - 10;
   detail.data[detail.length] = '\0';
 
@@ -1045,4 +1060,17 @@ void web_initialize(char* uid, dali_config_t config)
     esp_netif_deinit();
     esp_event_loop_delete_default();
   }
+
+  while (true)
+  {
+    vTaskDelay(pdMS_TO_TICKS(10000));
+  }
+}
+
+void web_initialize(char* uid, dali_config_t config)
+{
+  g_config = config;
+  memcpy(g_uid, uid, strlen(uid));
+
+  xTaskCreate(web_task, "DALI Task", 4096, NULL, 1, NULL);
 }

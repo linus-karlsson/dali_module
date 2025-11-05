@@ -11,6 +11,7 @@
 #include "util.h"
 #include "platform.h"
 #include "pin_define.h"
+#include "web/web.h"
 
 #define DALI_MESSAGE_LENGTH 6
 
@@ -84,6 +85,8 @@ static dali_t dali = {};
 static const int delay_time = 15;
 
 static const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+static const uint32_t g_total_filters = 6;
+static const uint32_t g_sample_total_count = 600;
 
 void dali_initialize_(void);
 void dali_turn_on_light_(void);
@@ -333,10 +336,6 @@ uint8_t dali_query(uint8_t command, uint8_t is_extended, bool* error_out)
   return result;
 }
 
-uint32_t commands_count = 0;
-uint8_t commands_sent[1024] = {};
-uint8_t same_count = 0;
-
 void check_if_stored_command(uint8_t command)
 {
   switch (command)
@@ -432,23 +431,6 @@ void dali_send_brightness(uint8_t brightness)
     }
   }
 }
-
-void dali_set_command(uint8_t value, uint8_t command, bool extended)
-{
-  dali_set_DTR0(value);
-  if (extended)
-  {
-    lsx_delay_millis(delay_time);
-    dali_transmit(0xC1, 6);
-  }
-  lsx_delay_millis(delay_time);
-  dali_broadcast_twice(command);
-  lsx_delay_millis(delay_time);
-  check_if_stored_command(command);
-}
-
-static uint32_t g_total_filters = 4;
-static uint32_t g_sample_total_count = 600;
 
 static void check_input(uint8_t pin, uint8_t* filter_values,
                         uint32_t* filter_indices_out, uint32_t* filter_count_out)
@@ -579,19 +561,16 @@ void dali_scan(void)
   int32_t last_address = high_address;
   dali.short_address = 0;
 
+  uint32_t count = 0;
   bool still_scanning = true;
-  while (still_scanning)
+  while (still_scanning && ((count++) < 128))
   {
     esp_task_wdt_reset();
 
     while ((high_address - low_address) > 0)
     {
-#if 0
-      lsx_log("High: %ld\n", high_address);
-      lsx_log("Low:  %ld\n", low_address);
-#endif
       bool error = false;
-      for (uint32_t i = 0; i < 2; ++i)
+      for (uint32_t i = 0; i < 3; ++i)
       {
         lsx_delay_millis(delay_time);
         dali_transmit(0xB1, (current_address >> 16) & 0xFF);
@@ -602,7 +581,7 @@ void dali_scan(void)
 
         lsx_delay_millis(delay_time);
         dali_transmit(0xA9, 0);
-        dali_receive_(&error, 50000);
+        dali_receive_(&error, 40000);
         if (!error)
         {
           break;
@@ -666,6 +645,12 @@ void dali_scan(void)
 
 void dali_initialize_(void)
 {
+  for (uint32_t i = 0; i < array_size(dali_input_pins); ++i)
+  {
+    lsx_gpio_config(dali_input_pins[i], LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_DISABLE,
+                    true, false);
+  }
+
   lsx_log("Dali init\n");
 
   dali.tx_pin = DALI_TX;
@@ -777,23 +762,27 @@ void dali_task(void* pvParameters)
 {
   esp_task_wdt_add(NULL);
 
+  dali_initialize_();
+
+  vTaskDelay(pdMS_TO_TICKS(100));
+
+  start_wifi();
+
+  vTaskDelay(pdMS_TO_TICKS(5000));
+
   bool turn_off_sequence = false;
   bool turn_off_blink = false;
   bool has_read_inputs = false;
   timer_ms_t turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
   timer_ms_t send_brightness_timer = timer_create_ms(10000);
 
-  timer_ms_t check_input_timer = timer_create_ms(1);
-  const uint32_t random_delay_max = 10;
+  const uint32_t random_delay_max = 4;
   uint32_t random_delay = random_delay_max;
 
-  uint32_t filter_sample_count[3] = {};
-  uint32_t filter_sample_indices[3] = {};
   uint8_t filter_samples[3][g_sample_total_count] = {};
 
   uint32_t filter_count = 0;
   uint32_t filter_index = 0;
-
   bool filters[3][g_total_filters] = {};
 
   bool filter_value[3] = {};
@@ -856,7 +845,7 @@ void dali_task(void* pvParameters)
     for (uint32_t i = 0; i < array_size(filter_value); ++i)
     {
       uint32_t threshold =
-        (uint32_t)((float)g_sample_total_count * (filter_value[i] ? 0.4f : 0.8f));
+        (uint32_t)((float)g_sample_total_count * (filter_value[i] ? 0.5f : 0.75f));
       filters[i][filter_index] = 1;
       if (on_count[i] < threshold)
       {
@@ -871,18 +860,9 @@ void dali_task(void* pvParameters)
     {
       --filter_count;
 
-      for (uint32_t i = 0; i < array_size(filter_value); ++i)
-      {
-        lsx_log("Filters %lu: { ", i);
-        for (uint32_t j = 0; j < (g_total_filters - 1); ++j)
-        {
-          lsx_log("%u, ", filters[i][j]);
-        }
-        lsx_log("%u }\n", filters[i][g_total_filters - 1]);
-      }
-      lsx_log("\n");
+      has_read_inputs = true;
 
-      lsx_log("Filter values: ");
+      uint32_t max_different = 0;
       for (uint32_t i = 0; i < array_size(filter_value); ++i)
       {
         uint32_t true_count = 0;
@@ -890,20 +870,30 @@ void dali_task(void* pvParameters)
         {
           true_count += (uint8_t)(filters[i][j]);
         }
-        if (filter_value[i])
+        if (true_count == 0)
         {
-          if (true_count == 0)
-          {
-            filter_value[i] = 0;
-          }
+          filter_value[i] = 0;
         }
         else if (true_count == g_total_filters)
         {
           filter_value[i] = 1;
         }
-        lsx_log("%u ", filter_value[i]);
+        else
+        {
+          uint32_t diff = true_count;
+          if (filter_value[i])
+          {
+            diff = g_total_filters - true_count;
+          }
+          if (diff > max_different)
+          {
+            max_different = diff;
+          }
+        }
       }
-      lsx_log("\n\n");
+      float diff_percent = ((float)max_different) / ((float)g_total_filters);
+      uint8_t value = 127 * diff_percent;
+      led_set(LED_TIMER, value, 127 - value, 0);
 
       uint8_t lamp_pins[] = { LED_I1, LED_I2, LED_I3 };
       for (uint32_t i = 0; i < array_size(lamp_pins); ++i)
@@ -940,18 +930,25 @@ void dali_task(void* pvParameters)
       }
     }
 
-#if 0
     if (timer_is_up_and_reset_ms(&log_values_timer, lsx_get_millis()))
     {
       for (uint32_t i = 0; i < array_size(filter_value); ++i)
       {
-        lsx_log("Array: { ");
-        for (uint32_t j = 0; j < (filter_total_count - 1); ++j)
+        lsx_log("Filters %lu: { ", i);
+        for (uint32_t j = 0; j < (g_total_filters - 1); ++j)
         {
-          lsx_log("%u, ", filter_values[1][j]);
+          lsx_log("%u, ", filters[i][j]);
         }
-        lsx_log("%u }\n", filter_values[2][filter_total_count - 1]);
+        lsx_log("%u }\n", filters[i][g_total_filters - 1]);
       }
+      lsx_log("\n");
+
+      lsx_log("Filter values: ");
+      for (uint32_t i = 0; i < array_size(filter_value); ++i)
+      {
+        lsx_log("%u ", filter_value[i]);
+      }
+      lsx_log("\n\n");
     }
 
     if (dali.config.blink_enabled && turn_off_sequence)
@@ -975,27 +972,25 @@ void dali_task(void* pvParameters)
     }
     turn_off_blink = turn_off_blink && turn_off_sequence;
 
-
     if (!turn_off_blink && has_read_inputs &&
         timer_is_up_and_reset_ms(&send_brightness_timer, lsx_get_millis()))
     {
       dali_send_brightness(dali.current_brightness);
     }
 
+    vTaskDelay(
+      pdMS_TO_TICKS(32 + (random_delay * (random_delay <= random_delay_max))));
+    random_delay = rand() % random_delay_max;
+
     delta_time = (float)(start - last_time) / 1000.0f;
     last_time = start;
 
-    main_light_tick += (48 * delta_time);
+    main_light_tick += (32 * delta_time);
     if (main_light_tick >= 127)
     {
       main_light_tick = 24;
     }
     led_set(LED_MAIN, 0, main_light_tick, 0);
-#endif
-
-    vTaskDelay(
-      pdMS_TO_TICKS(500 + (random_delay * (random_delay <= random_delay_max))));
-    random_delay = rand() % random_delay_max;
   }
 }
 
@@ -1038,14 +1033,6 @@ void dali_initialize(nvs_t* scenes_nvs, dali_config_t config)
 {
   dali.config = config;
   dali.scene_nvs = scenes_nvs;
-
-  for (uint32_t i = 0; i < array_size(dali_input_pins); ++i)
-  {
-    lsx_gpio_config(dali_input_pins[i], LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_DISABLE,
-                    true, false);
-  }
-
-  // dali_initialize_();
 
   xTaskCreateStatic(dali_task, "DALI Task", DALI_STACK_SIZE, NULL, 3, dali_stack,
                     &dali_stack_type);

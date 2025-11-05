@@ -19,6 +19,8 @@ void web_initialize(char *uid, dali_config_t config);
 
 void web_uninitialize(void);
 
+void start_wifi(void);
+
 #ifdef __cplusplus
 }
 #endif
