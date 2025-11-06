@@ -129,6 +129,7 @@ void     lsx_delay_micro(int64_t us);
 lsx_timer_handle_t lsx_timer_create(void (*timer_callback)(void*), void* args);
 void               lsx_timer_destroy(lsx_timer_handle_t handle);
 bool               lsx_timer_start(lsx_timer_handle_t handle, uint64_t when, bool repeated);
+void               lsx_timer_stop(lsx_timer_handle_t handle);
 
 
 #ifdef __cplusplus

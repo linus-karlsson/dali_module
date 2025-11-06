@@ -1071,6 +1071,7 @@ void web_initialize(char* uid, dali_config_t config)
 {
   g_config = config;
   memcpy(g_uid, uid, strlen(uid));
+  g_start_wifi = true;
 
   xTaskCreate(web_task, "DALI Task", 4096, NULL, 1, NULL);
 }

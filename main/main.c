@@ -34,6 +34,15 @@ void getUid64()
 }
 void setup()
 {
+  lsx_gpio_config(DALI_TX, LSX_GPIO_MODE_OUTPUT, LSX_GPIO_INTR_DISABLE, false, false);
+  lsx_gpio_config(DALI_RX, LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_ANYEDGE, true, false);
+  const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+  for (uint32_t i = 0; i < array_size(dali_input_pins); ++i)
+  {
+    lsx_gpio_config(dali_input_pins[i], LSX_GPIO_MODE_INPUT, LSX_GPIO_INTR_DISABLE,
+                    true, false);
+  }
+
   getUid64();
   lsx_nvs_initialize();
 
@@ -43,7 +52,8 @@ void setup()
   lsx_nvs_get_uint8(&nvs, "BEnable", &config.blink_enabled, 0);
   lsx_nvs_get_uint8(&nvs, "FTime", &config.fade_time, 4);
   lsx_nvs_get_uint32(&nvs, "BDuration", &config.blink_duration, 0);
-  lsx_nvs_get_bytes(&nvs, "Scenes", config.scenes, &value_size, sizeof(config.scenes));
+  lsx_nvs_get_bytes(&nvs, "Scenes", config.scenes, &value_size,
+                    sizeof(config.scenes));
 
   dali_led_initialize();
 
@@ -54,13 +64,8 @@ void setup()
   }
   lsx_log("\n");
 
-  vTaskDelay(pdMS_TO_TICKS(500));
-  web_uninitialize();
   web_initialize(my_uid, config);
-  vTaskDelay(pdMS_TO_TICKS(500));
-
   dali_initialize(&nvs, config);
-
 }
 
 void app_main(void)

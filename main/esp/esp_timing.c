@@ -54,3 +54,8 @@ bool lsx_timer_start(lsx_timer_handle_t handle, uint64_t when, bool repeated)
     return esp_timer_start_once((esp_timer_handle_t)handle, when) == ESP_OK;
   }
 }
+
+void lsx_timer_stop(lsx_timer_handle_t handle)
+{
+  esp_timer_stop((esp_timer_handle_t)handle);
+}
