@@ -76,7 +76,7 @@ static dali_t dali = {};
 
 static const int delay_time = 15;
 
-// static const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
+static const uint8_t dali_input_pins[] = { DALI_PIN_0, DALI_PIN_1, DALI_PIN_2 };
 static const uint32_t g_total_filters = 6;
 static const uint32_t g_sample_total_count = 600;
 
@@ -138,10 +138,8 @@ static void dali_rmt_append_bit(rmt_symbol_word_t* rmt_buffer, uint32_t index,
   current_symbol->level1 = !bit;
 }
 
-void dali_transmit(uint8_t address, uint8_t command)
+void dali_transmit_(uint8_t address, uint8_t command)
 {
-  rmt_enable(g_rmt_tx_channel);
-
   rmt_symbol_word_t frame[32] = {};
   uint32_t index = 0;
 
@@ -158,17 +156,20 @@ void dali_transmit(uint8_t address, uint8_t command)
                index * sizeof(rmt_symbol_word_t), &tx_cfg);
   rmt_tx_wait_all_done(g_rmt_tx_channel, 100);
   lsx_gpio_write(dali.tx_pin, LSX_GPIO_LOW);
+}
 
+void dali_transmit(uint8_t address, uint8_t command)
+{
+  rmt_enable(g_rmt_tx_channel);
+  dali_transmit_(address, command);
   rmt_disable(g_rmt_tx_channel);
 }
 
 rmt_symbol_word_t raw_symbols[64] = {};
 
-bool dali_read_response(void)
+bool dali_read_response(uint32_t timeout_ms, uint8_t* response_out, bool* any_symbols)
 {
-  rmt_enable(g_rmt_rx_channel);
-
-  lsx_delay_millis(2);
+  lsx_delay_micro(2000);
 
   rmt_receive_config_t receive_config = {
     .signal_range_min_ns = 2000,
@@ -178,23 +179,14 @@ bool dali_read_response(void)
 
   rmt_rx_done_event_data_t rx_data = {};
   BaseType_t queue_result =
-    xQueueReceive(receive_queue, &rx_data, pdMS_TO_TICKS(100));
+    xQueueReceive(receive_queue, &rx_data, pdMS_TO_TICKS(timeout_ms));
 
   bool result = false;
 
+  uint8_t response = 0;
+
   if (queue_result == pdPASS)
   {
-#if 0
-    printf("NUM: %u\n", rx_data.num_symbols);
-    for (uint32_t i = 0; i < rx_data.num_symbols; ++i)
-    {
-      rmt_symbol_word_t symbol = rx_data.received_symbols[i];
-      printf("Level 0: %u\n", rx_data.received_symbols[i].level0);
-      printf("Duration 0: %u\n", rx_data.received_symbols[i].duration0);
-      printf("Level 1: %u\n", rx_data.received_symbols[i].level1);
-      printf("Duration 1: %u\n", rx_data.received_symbols[i].duration1);
-    }
-#endif
     if (rx_data.num_symbols <= 16)
     {
       uint32_t count = 0;
@@ -202,7 +194,7 @@ bool dali_read_response(void)
       for (uint32_t i = 0; i < rx_data.num_symbols; ++i)
       {
         rmt_symbol_word_t symbol = rx_data.received_symbols[i];
-        if (symbol.duration0 > 300)
+        if (symbol.duration0 > 200)
         {
           values[count++] = symbol.level0;
           if (symbol.duration0 > 600)
@@ -210,7 +202,7 @@ bool dali_read_response(void)
             values[count++] = symbol.level0;
           }
         }
-        if (symbol.duration1 > 300)
+        if (symbol.duration1 > 200)
         {
           values[count++] = symbol.level1;
           if (symbol.duration1 > 600)
@@ -219,14 +211,12 @@ bool dali_read_response(void)
           }
         }
       }
-      printf("Count: %lu\n", count);
       if (count == 17)
       {
         values[count++] = 0;
       }
       if (count == 18)
       {
-        uint8_t response = 0;
         for (uint32_t i = 2; i < 18; i += 2)
         {
           response <<= 1;
@@ -235,13 +225,29 @@ bool dali_read_response(void)
             response |= 1;
           }
         }
-        printf("Response: %u\n", response);
+        // printf("Response: %u\n", response);
         result = true;
+      }
+      else
+      {
+        printf("SYMBOLS: %u\n", rx_data.num_symbols);
+        for (uint32_t i = 0; i < rx_data.num_symbols; ++i)
+        {
+          printf("Level 0: %u\n", rx_data.received_symbols[i].level0);
+          printf("Duration 0: %u\n", rx_data.received_symbols[i].duration0);
+          printf("Level 1: %u\n", rx_data.received_symbols[i].level1);
+          printf("Duration 1: %u\n", rx_data.received_symbols[i].duration1);
+        }
+      }
+      if (any_symbols)
+      {
+        (*any_symbols) = (result || (rx_data.num_symbols >= 4));
       }
     }
   }
 
-  rmt_disable(g_rmt_rx_channel);
+  if (response_out) (*response_out) = response;
+
   return result;
 }
 
@@ -339,17 +345,29 @@ static inline void dali_broadcast_twice(uint8_t command)
   lsx_delay_millis(delay_time);
 }
 
-uint8_t dali_query_(uint8_t address, uint8_t command, bool* error)
+uint8_t dali_query_(uint8_t address, uint8_t command, bool* error_out,
+                    bool* any_response)
 {
   lsx_delay_millis(delay_time);
-  pin_change_count = 0;
-  dali_transmit(address, command);
-  return dali_receive(error);
+
+  uint8_t result = 0;
+
+  rmt_enable(g_rmt_tx_channel);
+  rmt_enable(g_rmt_rx_channel);
+
+  dali_transmit_(address, command);
+  bool success = dali_read_response(40, &result, any_response);
+
+  rmt_disable(g_rmt_rx_channel);
+  rmt_disable(g_rmt_tx_channel);
+
+  if (error_out) (*error_out) = !success;
+  return result;
 }
 
 uint8_t dali_query1(uint8_t address, uint8_t command, bool* error)
 {
-  uint8_t response = dali_query_(address, command, error);
+  uint8_t response = dali_query_(address, command, error, NULL);
   if (error)
   {
     const uint32_t total_number_of_tries = 2;
@@ -358,7 +376,7 @@ uint8_t dali_query1(uint8_t address, uint8_t command, bool* error)
     {
       *error = false;
       lsx_delay_millis(delay_time * 2);
-      response = dali_query_(address, command, error);
+      response = dali_query_(address, command, error, NULL);
     }
   }
   return response;
@@ -616,9 +634,9 @@ void dali_scan(void)
 
     while ((high_address - low_address) > 0)
     {
-      lsx_log("Low: %ld\n", low_address);
-      lsx_log("High: %ld\n", high_address);
-      bool error = false;
+      // lsx_log("Low: %ld\n", low_address);
+      // lsx_log("High: %ld\n", high_address);
+      bool any_response = false;
       for (uint32_t i = 0; i < 1; ++i)
       {
         lsx_delay_millis(delay_time);
@@ -629,21 +647,21 @@ void dali_scan(void)
         dali_transmit(0xB5, current_address & 0xFF);
 
         lsx_delay_millis(delay_time);
-        dali_transmit(0xA9, 0);
-        dali_receive_(&error, 20000);
-        if (!error)
+
+        dali_query_(0xA9, 0, NULL, &any_response);
+        if (any_response)
         {
           break;
         }
       }
 
-      if (error)
+      if (any_response)
       {
-        low_address = current_address + 1;
+        high_address = current_address;
       }
       else
       {
-        high_address = current_address;
+        low_address = current_address + 1;
       }
 
       current_address = (int32_t)(low_address + high_address) / 2;
@@ -689,6 +707,8 @@ void dali_scan(void)
   dali_transmit(0xA1, 0);
   lsx_delay_millis(delay_time);
 
+  vTaskDelay(pdMS_TO_TICKS(600));
+
   lsx_log("Short address: %u\n", dali.short_address);
 }
 
@@ -719,9 +739,20 @@ void dali_initialize_(void)
 
   dali_initialize_rmt();
 
+  vTaskDelay(pdMS_TO_TICKS(600));
+
 #if 0
   lsx_gpio_install_interrupt_service();
   lsx_gpio_add_pin_interrput(dali.rx_pin, pin_change, NULL);
+#endif
+
+#if 1
+
+  lsx_delay_millis(delay_time);
+  dali_transmit(0xA1, 0);
+  lsx_delay_millis(delay_time);
+
+  vTaskDelay(pdMS_TO_TICKS(600));
 
 #if 1
   lsx_delay_millis(delay_time);
@@ -736,7 +767,9 @@ void dali_initialize_(void)
   dali_transmit(0xA7, 0);
   lsx_delay_millis(delay_time);
 
+
   dali_scan();
+
 #endif
 
   lsx_delay_millis(delay_time);
@@ -757,6 +790,14 @@ void dali_initialize_(void)
   dali_broadcast_twice(DALI_SET_FADE_RATE);
 
   dali_set_saved_configuration();
+
+  srand(lsx_get_micro());
+  lsx_delay_millis(delay_time);
+  dali_send_brightness(0);
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  dali_send_brightness(rand() % 100);
+  vTaskDelay(pdMS_TO_TICKS(5000));
+  esp_restart();
 #endif
 }
 
@@ -834,7 +875,7 @@ void dali_task(void* pvParameters)
   bool turn_off_blink = false;
   bool has_read_inputs = false;
   timer_ms_t turn_off_timer = timer_create_ms(dali.config.blink_duration * 1000);
-  timer_ms_t send_brightness_timer = timer_create_ms(1000);
+  timer_ms_t send_brightness_timer = timer_create_ms(10000);
 
   const uint32_t random_delay_max = 4;
   uint32_t random_delay = random_delay_max;
@@ -860,7 +901,7 @@ void dali_task(void* pvParameters)
     uint32_t start = lsx_get_millis();
     esp_task_wdt_reset();
 
-#if 1
+#if 0
     if (timer_is_up_ms(send_brightness_timer, lsx_get_millis()))
     {
       // for (uint32_t i = 0; i < 4; ++i)
@@ -1070,12 +1111,6 @@ void dali_task(void* pvParameters)
         timer_is_up_ms(send_brightness_timer, lsx_get_millis()))
     {
       dali_send_brightness(dali.current_brightness);
-
-#if 1
-      dali_transmit(DALI_BROADCAST, DALI_QUERY_ACTUAL_OUTPUT);
-      dali_read_response();
-#endif
-
       send_brightness_timer.time = lsx_get_millis();
     }
 

@@ -64,8 +64,9 @@ void setup()
   }
   lsx_log("\n");
 
-  web_initialize(my_uid, config);
   dali_initialize(&nvs, config);
+
+  web_initialize(my_uid, config);
 }
 
 void app_main(void)
